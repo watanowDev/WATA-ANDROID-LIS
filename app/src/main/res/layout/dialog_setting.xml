@@ -1,0 +1,574 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/alert_root_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="10dp"
+        app:cardCornerRadius="8dp"
+        app:cardBackgroundColor="#555555">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+
+           >
+            
+            <LinearLayout
+                android:id="@+id/urlLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingLeft="10dp"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                >
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="SERVER URL:"
+                    android:textColor="#cccccc"
+                    />
+
+                <EditText
+                    android:id="@+id/platformURL"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="입력해주세요"
+                    android:textSize="15dp"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:inputType="none"
+                    android:imeOptions="actionDone"
+                    />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/locationLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingLeft="10dp"
+                app:layout_constraintTop_toBottomOf="@+id/urlLayout"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                >
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="센터 ID:"
+                    android:textColor="#cccccc"
+                    />
+
+                <EditText
+                    android:id="@+id/locationID"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="입력해주세요"
+                    android:inputType="text"
+                    android:imeOptions="actionDone"
+                    />
+            </LinearLayout>
+
+
+            <LinearLayout
+                android:id="@+id/vehicleLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingLeft="10dp"
+                app:layout_constraintTop_toBottomOf="@+id/locationLayout"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                >
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="지게차 ID:"
+                    android:textColor="#cccccc"
+                    />
+
+                <EditText
+                    android:id="@+id/vehicleID"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="입력해주세요"
+                    android:inputType="text"
+                    android:imeOptions="actionDone"
+                    />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/macLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingLeft="10dp"
+                app:layout_constraintTop_toBottomOf="@+id/vehicleLayout"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                >
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="RFID MAC:"
+                    android:textColor="#cccccc"
+                    />
+
+                <EditText
+                    android:id="@+id/rfMac"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="입력해주세요"
+                    />
+            </LinearLayout>
+
+
+            <LinearLayout
+                android:id="@+id/rfthresLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingLeft="10dp"
+                app:layout_constraintTop_toBottomOf="@+id/macLayout"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                >
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="RFID threshold:"
+                    android:textColor="#cccccc"
+                    />
+
+                <EditText
+                    android:id="@+id/rfThres"
+                    android:layout_width="50dp"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="num"
+                    android:inputType="number"
+                    android:imeOptions="actionDone"
+                    />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="RFID interval:"
+                    android:textColor="#cccccc"
+                    />
+
+                <EditText
+                    android:id="@+id/rfInterval"
+                    android:layout_width="50dp"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="num"
+                    android:inputType="number"
+                    android:imeOptions="actionDone"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ms"
+                    android:textColor="#cccccc"
+                    />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/floorLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingLeft="10dp"
+                app:layout_constraintTop_toBottomOf="@+id/rfthresLayout"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                >
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="층 높이:"
+                    android:textColor="#cccccc"
+                    />
+
+                <EditText
+                    android:id="@+id/floorHeight"
+                    android:layout_width="100dp"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="입력해주세요"
+                    android:inputType="number"
+                    android:imeOptions="actionDone"
+
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="(mm)"
+                    android:textColor="#cccccc"
+                    />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/forkLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingLeft="10dp"
+                app:layout_constraintTop_toBottomOf="@+id/floorLayout"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                >
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="포크 길이:"
+                    android:textColor="#cccccc"
+                    />
+
+                <EditText
+                    android:id="@+id/forkLength"
+                    android:layout_width="100dp"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="입력해주세요"
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="(mm)"
+                    android:textColor="#cccccc"
+                    />
+            </LinearLayout>
+
+
+            <LinearLayout
+                android:id="@+id/pickLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingLeft="10dp"
+                app:layout_constraintTop_toBottomOf="@+id/forkLayout"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                >
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="적재 거리:"
+                    android:textColor="#cccccc"
+                    />
+
+                <EditText
+                    android:id="@+id/pickThres"
+                    android:layout_width="100dp"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="입력해주세요"
+                    android:inputType="number"
+                    android:imeOptions="actionDone"
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="(mm)"
+                    android:textColor="#cccccc"
+                    />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/tofwLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingLeft="10dp"
+                app:layout_constraintTop_toBottomOf="@+id/pickLayout"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                >
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="TOF WIDTH:"
+                    android:textColor="#cccccc"
+                    />
+
+                <EditText
+                    android:id="@+id/tofWidth"
+                    android:layout_width="100dp"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="입력해주세요"
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="(pix)"
+                    android:textColor="#cccccc"
+                    />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/tofhLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingLeft="10dp"
+                app:layout_constraintTop_toBottomOf="@+id/tofwLayout"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                >
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="TOF HEIGHT:"
+                    android:textColor="#cccccc"
+                    />
+
+                <EditText
+                    android:id="@+id/tofHeight"
+                    android:layout_width="100dp"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="입력해주세요"
+                    android:inputType="number"
+                    android:imeOptions="actionDone"
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="(pix)"
+                    android:textColor="#cccccc"
+                    />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/resampleLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingLeft="10dp"
+                app:layout_constraintTop_toBottomOf="@+id/tofhLayout"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                >
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Resampling W:"
+                    android:textColor="#cccccc"
+                    />
+
+                <EditText
+                    android:id="@+id/resampleWidthMin"
+                    android:layout_width="50dp"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="min"
+                    android:inputType="number"
+                    android:imeOptions="actionDone"
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=","
+                    android:textColor="#cccccc"
+                    />
+                <EditText
+                    android:id="@+id/resampleWidthMax"
+                    android:layout_width="50dp"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="max"
+                    android:inputType="number"
+                    android:imeOptions="actionDone"
+                    />
+
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="H:"
+                    android:textColor="#cccccc"
+                    />
+
+                <EditText
+                    android:id="@+id/resampleHeightMin"
+                    android:layout_width="50dp"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="min"
+                    android:inputType="number"
+                    android:imeOptions="actionDone"
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=","
+                    android:textColor="#cccccc"
+                    />
+                <EditText
+                    android:id="@+id/resampleHeightMax"
+                    android:layout_width="50dp"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="max"
+                    android:inputType="number"
+                    android:imeOptions="actionDone"
+                    />
+            </LinearLayout>
+
+
+            <LinearLayout
+                android:id="@+id/matrixLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingLeft="10dp"
+                app:layout_constraintTop_toBottomOf="@+id/resampleLayout"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                >
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="MATRIX[X,Y]:"
+                    android:textColor="#cccccc"
+                    />
+
+                <EditText
+                    android:id="@+id/matrixX"
+                    android:layout_width="50dp"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="min"
+                    android:inputType="number"
+                    android:imeOptions="actionDone"
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=","
+                    android:textColor="#cccccc"
+                    />
+                <EditText
+                    android:id="@+id/matrixY"
+                    android:layout_width="50dp"
+                    android:layout_height="wrap_content"
+                    android:textColorHint="#999999"
+                    android:textColor="#ffffff"
+                    android:textSize="15dp"
+                    android:hint="max"
+                    android:inputType="number"
+                    android:imeOptions="actionDone"
+                    />
+
+
+            </LinearLayout>
+
+
+
+            <LinearLayout
+                android:id="@+id/okbtn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                app:layout_constraintTop_toBottomOf="@+id/matrixLayout"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                android:gravity="center">
+
+                <LinearLayout
+                    android:id="@+id/btn_cancel_layout"
+                    android:layout_width="150dp"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginLeft="16dp"
+                    android:layout_marginRight="16dp"
+                    android:layout_marginBottom="5dp"
+                    android:gravity="center">
+
+                    <TextView
+                        android:id="@+id/btn_cancel"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:background="#d8d9db"
+                        android:gravity="center"
+                        android:text="취소"
+                        android:textColor="#000000" />
+
+                </LinearLayout>
+
+
+                <LinearLayout
+                    android:id="@+id/btn_ok_layout"
+                    android:layout_width="150dp"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginLeft="16dp"
+                    android:layout_marginRight="16dp"
+                    android:layout_marginBottom="5dp"
+                    android:gravity="center">
+
+                    <TextView
+                        android:id="@+id/btn_ok"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:background="#d8d9db"
+                        android:gravity="center"
+                        android:text="확인"
+                        android:textColor="#000000" />
+
+                </LinearLayout>
+
+
+            </LinearLayout>
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+
+    </androidx.cardview.widget.CardView>
+
+</RelativeLayout>

@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity"
+    android:background="#777777">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appBarLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:theme="@style/AppTheme.AppBarOverlay">
+
+        <LinearLayout
+            android:id="@+id/CargoExpect"
+            android:layout_width="match_parent"
+            android:layout_height="70dp"
+            android:background="#339900"
+            android:orientation="vertical"
+            android:layout_gravity="center"
+            android:gravity="center"
+            >
+            <LinearLayout
+                android:id="@+id/CargoLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginBottom="5dp"
+                >
+
+                <TextView
+                    android:id="@+id/CargoDepth"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="TOF"
+                    android:textColor="#ffffff"
+                    android:gravity="center"
+                    android:textSize="20dp"
+                    android:layout_gravity="center"
+                    android:layout_marginBottom="2dp"
+                    />
+
+
+
+                <TextView
+                    android:id="@+id/distanceSensorText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="거리센서"
+                    android:textSize="20dp"
+                    android:textColor="#ffffff"
+                    android:gravity="center"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#777777">
+
+            <TextureView
+                android:id="@+id/rawData"
+                android:layout_width="240dp"
+                android:layout_height="320dp"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                android:visibility="invisible"/>
+
+
+            <com.budiyev.android.codescanner.CodeScannerView
+                android:id="@+id/scanner_view"
+                android:layout_width="match_parent"
+                android:layout_height="700dp"
+                android:visibility="visible"
+                app:autoFocusButtonColor="@android:color/white"
+                app:autoFocusButtonVisible="false"
+                app:flashButtonColor="@android:color/white"
+                app:flashButtonVisible="false"
+                app:frameAspectRatioHeight="1.7"
+                app:frameAspectRatioWidth="1"
+                app:frameColor="@android:color/white"
+                app:frameCornersRadius="0dp"
+                app:frameCornersSize="0dp"
+                app:frameSize="1"
+                app:frameThickness="1dp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintHorizontal_bias="0.0"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.0"
+                app:maskColor="#77000000" />
+
+            <Button
+                android:id="@+id/viewChanger"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:onClick="setViewMode"
+                android:text="MODE"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                />
+
+            <Button
+                android:id="@+id/logMessageButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:onClick="callLogViewer"
+                android:text="LOG"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintRight_toRightOf="parent"
+                />
+
+            <Button
+                android:id="@+id/settingBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:onClick="settingParameter"
+                android:text="setting"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+
+                />
+
+            <Button
+                android:id="@+id/setRFTAG"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:onClick="setRFTag"
+                android:text="RFsetting"
+                app:layout_constraintLeft_toRightOf="@+id/settingBtn"
+                app:layout_constraintBottom_toBottomOf="parent"
+
+                />
+
+            <Button
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="TEST"
+                android:onClick="testpp"
+                app:layout_constraintLeft_toRightOf="@+id/setRFTAG"
+                app:layout_constraintBottom_toBottomOf="parent"/>
+
+            <TextView
+                android:id="@+id/qrText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="QR 스캔"
+                android:textSize="20dp"
+                android:textColor="#ffffff"
+                android:gravity="center"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintRight_toRightOf="parent"/>
+
+
+            <TextView
+                android:id="@+id/cargoFloor"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="층수"
+                android:textSize="20dp"
+                android:textColor="#ffffff"
+                android:gravity="center"
+                app:layout_constraintTop_toBottomOf="@id/qrText"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintRight_toRightOf="parent"/>
+
+
+            <TextView
+                android:id="@+id/cargoAddress"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="위치"
+                android:textSize="20dp"
+                android:textColor="#ffffff"
+                android:gravity="center"
+                app:layout_constraintTop_toBottomOf="@id/cargoFloor"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintRight_toRightOf="parent"/>
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
