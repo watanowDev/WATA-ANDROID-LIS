@@ -22,13 +22,13 @@ public class AppConfig {
 
 
     public static int TOF_WIDTH = 320;
-    public static int TOF_RESAMPLING_WIDTH_MIN = 32; //37
-    public static int TOF_RESAMPLING_WIDTH_MAX = 69;
+    public static int TOF_RESAMPLING_WIDTH_MIN = 130; //40
+    public static int TOF_RESAMPLING_WIDTH_MAX = 170;
 
 
     public static int TOF_HEIGHT = 240;
-    public static int TOF_RESAMPLING_HEIGHT_MIN = 102; //37
-    public static int TOF_RESAMPLING_HEIGHT_MAX = 139;
+    public static int TOF_RESAMPLING_HEIGHT_MIN = 100; //40
+    public static int TOF_RESAMPLING_HEIGHT_MAX = 140;
 
     public static int TOF_FORK_LENGTH = 30;
     public static int TOF_FORK_THICKNESS = 20;

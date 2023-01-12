@@ -72,8 +72,9 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
         this.depthFrameVisualizer = depthFrameVisualizer;
         int size = WIDTH * HEIGHT;
         rawMask = new int[size];
-        mMatrixWidth = Math.floorDiv(WIDTH,10);
-        mMatrixHeight =  Math.floorDiv(HEIGHT,10);
+        mMatrixWidth = Math.floorDiv(AppConfig.TOF_RESAMPLING_WIDTH_MAX-AppConfig.TOF_RESAMPLING_WIDTH_MIN+100,10);
+        mMatrixHeight =  Math.floorDiv(AppConfig.TOF_RESAMPLING_HEIGHT_MAX-AppConfig.TOF_RESAMPLING_HEIGHT_MIN+100,10);
+
     }
 
     @Override
@@ -149,20 +150,8 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
                     rawMask[(HEIGHT - y - 1) * WIDTH + (WIDTH - x - 1)] = (int) normalizeRange(depth);
                 }
 
-//                if (x < (WIDTH-mResamplingIndexX[0]) && x > (WIDTH-mResamplingIndexX[1])) {
-//                    if (y < (HEIGHT-mResamplingIndexY[0]) && y > (HEIGHT-mResamplingIndexY[1])) {
-//                        if (depth != 0) {
-//                            totalDepth += depth;
-//                            depthNum++;
-//                        }
-//                    }
-//                }
-
-                if (x >= (WIDTH - AppConfig.TOF_FORK_LENGTH)) {
-                    if ((y >= ((HEIGHT / 2) - (AppConfig.TOF_FORK_GAP + AppConfig.TOF_FORK_THICKNESS)) &&
-                            y <= (HEIGHT / 2) - (AppConfig.TOF_FORK_GAP)) ||
-                            (y <= ((HEIGHT / 2) + (AppConfig.TOF_FORK_GAP + AppConfig.TOF_FORK_THICKNESS)) &&
-                                    y >= (HEIGHT / 2) + (AppConfig.TOF_FORK_GAP))) {
+                if (x < (WIDTH-mResamplingIndexX[0]+40) && x > (WIDTH-mResamplingIndexX[1]+65)) {
+                    if (y < (HEIGHT-mResamplingIndexY[0]) && y > (HEIGHT-mResamplingIndexY[1])) {
                         if (depth != 0) {
                             totalDepth += depth;
                             depthNum++;
@@ -170,14 +159,28 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
                     }
                 }
 
+//                if (x >= (WIDTH - AppConfig.TOF_FORK_LENGTH)) {
+//                    if ((y >= ((HEIGHT / 2) - (AppConfig.TOF_FORK_GAP + AppConfig.TOF_FORK_THICKNESS)) &&
+//                            y <= (HEIGHT / 2) - (AppConfig.TOF_FORK_GAP)) ||
+//                            (y <= ((HEIGHT / 2) + (AppConfig.TOF_FORK_GAP + AppConfig.TOF_FORK_THICKNESS)) &&
+//                                    y >= (HEIGHT / 2) + (AppConfig.TOF_FORK_GAP))) {
+//                        if (depth != 0) {
+//                            totalDepth += depth;
+//                            depthNum++;
+//                        }
+//                    }
+//                }
 
 
-                if (mSamplingDistance != 0) {
+
+                if (mSamplingDistance != 0 && x < (WIDTH-(AppConfig.TOF_RESAMPLING_WIDTH_MIN-50)) && x >= (WIDTH-(AppConfig.TOF_RESAMPLING_WIDTH_MAX+50))
+                && y < (HEIGHT-(AppConfig.TOF_RESAMPLING_HEIGHT_MIN-50)) && y >= (HEIGHT -(AppConfig.TOF_RESAMPLING_HEIGHT_MAX+50))) {
                     totalVolume++;
-//                    if (depth > (mSamplingDistance - 150) && depth < (mSamplingDistance + 150)) {
-                    if(depth < mSamplingDistance){
+                    if (depth > (mSamplingDistance - 50) && depth < (mSamplingDistance + 50)) {
+//                    if(depth < mSamplingDistance){
                         sampleVolume++;
-                        matrix[Math.floorDiv(x,mMatrixWidth)][Math.floorDiv(HEIGHT -y-1,mMatrixHeight)]++;
+//                        Log.e("xy", Math.floorDiv(x-(WIDTH-(AppConfig.TOF_RESAMPLING_WIDTH_MAX+50)),mMatrixWidth) +"///"+ Math.floorDiv(y -(HEIGHT -(AppConfig.TOF_RESAMPLING_HEIGHT_MAX+50)) ,mMatrixHeight));
+                        matrix[Math.floorDiv(x-(WIDTH-(AppConfig.TOF_RESAMPLING_WIDTH_MAX+50)),mMatrixWidth)][9-Math.floorDiv((y-(HEIGHT-(AppConfig.TOF_RESAMPLING_HEIGHT_MAX+50))) ,mMatrixHeight)]++;
                     }
                 }
             }
@@ -189,25 +192,6 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
 
         avgDepth = getAverageDepth(totalDepth,depthNum);
         mSamplingDistance =  (int)(avgDepth/10)*10;
-
-//        if(mSamplingDistance < (AppConfig.FORK_LENGTH-470) && mSamplingDistance > (AppConfig.FORK_LENGTH-530) && !currentStatus){
-        if(mSamplingDistance < (AppConfig.FORK_LENGTH-250) && mSamplingDistance > (AppConfig.FORK_LENGTH-300) && !currentStatus){
-
-                double vol = ((sampleVolume*1.0f)/(totalVolume*1.0f))*100.0f;
-
-//            for(int i = 0 ; i < 10 ; i++){
-//                Log.e("matrixw10x10",Arrays.toString(matrix[i]));
-//            }
-//            Log.e("matrixw10x10","=====================================");
-
-//            sendCargoVolume((int)(20.0f+(80.0f*(vol/100.0f))), getMatrixData(matrix));
-//            sendCargoVolume((int)vol-15, getMatrixData(matrix));
-            sendCargoVolume((int)vol-15, getMatrixDataFromVolume((int)vol-15));
-//            int[] matrix = {0,0,0,0,0,0,0,0,0,0};
-//            sendCargoVolume((int)(20.0f+(80.0f*(vol/100.0f))), matrix);
-        }
-
-
 
 
         if(mSamplingDistance < AppConfig.PICK_THRESHOLD && avgDepth != 0){
@@ -232,7 +216,8 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
 
         if(MainActivity.viewMode){
             double p = ((sampleVolume*1.0f)/(totalVolume*1.0f))*100.0f;
-            int printp = (int) (20.0f+(80.0f*(p/100.0f)));
+            int printp = (int)p;
+            sendCargoVolume(printp,getMatrixData(matrix));
             sendDepth(avgDepth + " / "+ printp + "%");
         }else {
             sendDepth(String.valueOf(avgDepth));
@@ -269,59 +254,36 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
                 int index = y * WIDTH + x;
 
 
-                if(y < 120-AppConfig.TOF_FORK_GAP && y > 120-(AppConfig.TOF_FORK_GAP+AppConfig.TOF_FORK_THICKNESS)){
-                    if(x == AppConfig.TOF_FORK_LENGTH ){
+
+                if(x > AppConfig.TOF_RESAMPLING_WIDTH_MIN-40 && x <AppConfig.TOF_RESAMPLING_WIDTH_MAX-65){
+                    if(y == AppConfig.TOF_RESAMPLING_HEIGHT_MIN || y == AppConfig.TOF_RESAMPLING_HEIGHT_MAX){
                         bitmap.setPixel(x, y, Color.argb(255, 255, 0, 0));
                         continue;
                     }
                 }
 
-                if(y > 120+AppConfig.TOF_FORK_GAP && y < 120+(AppConfig.TOF_FORK_GAP+AppConfig.TOF_FORK_THICKNESS)){
-                    if(x == AppConfig.TOF_FORK_LENGTH ){;
-                        bitmap.setPixel(x, y, Color.argb(255, 255, 0, 0));
-                        continue;
-                    }
-                }
-
-
-                if(x <= AppConfig.TOF_FORK_LENGTH){
-                    if(y == 120+AppConfig.TOF_FORK_GAP || y == 120+(AppConfig.TOF_FORK_GAP+AppConfig.TOF_FORK_THICKNESS) ||
-                            y == 120-AppConfig.TOF_FORK_GAP || y == 120-(AppConfig.TOF_FORK_GAP+AppConfig.TOF_FORK_THICKNESS)){
+                if(y > AppConfig.TOF_RESAMPLING_HEIGHT_MIN  && y <AppConfig.TOF_RESAMPLING_HEIGHT_MAX){
+                    if(x == AppConfig.TOF_RESAMPLING_WIDTH_MIN-40 || x == AppConfig.TOF_RESAMPLING_WIDTH_MAX-65){
                         bitmap.setPixel(x, y, Color.argb(255, 255, 0, 0));
                         continue;
                     }
                 }
 
 
-                if(y <= 120+(AppConfig.TOF_RESAMPLING_VOLUME_WIDTH/2) && y >= 120-(AppConfig.TOF_RESAMPLING_VOLUME_WIDTH/2)){
-                    if(x == AppConfig.TOF_RESAMPLING_VOLUME_HEIGHT ){
+                if(x > AppConfig.TOF_RESAMPLING_WIDTH_MIN-50 && x <AppConfig.TOF_RESAMPLING_WIDTH_MAX+50){
+                    if(y == AppConfig.TOF_RESAMPLING_HEIGHT_MIN-50 || y == AppConfig.TOF_RESAMPLING_HEIGHT_MAX+50){
                         bitmap.setPixel(x, y, Color.argb(255, 0, 255, 0));
                         continue;
                     }
                 }
 
-                if(x <= AppConfig.TOF_RESAMPLING_VOLUME_HEIGHT){
-                    if(y == 120+(AppConfig.TOF_RESAMPLING_VOLUME_WIDTH/2) || y == 120-(AppConfig.TOF_RESAMPLING_VOLUME_WIDTH/2) ){
+                if(y > AppConfig.TOF_RESAMPLING_HEIGHT_MIN-50  && y <AppConfig.TOF_RESAMPLING_HEIGHT_MAX+50){
+                    if(x == AppConfig.TOF_RESAMPLING_WIDTH_MIN-50 || x == AppConfig.TOF_RESAMPLING_WIDTH_MAX+50){
                         bitmap.setPixel(x, y, Color.argb(255, 0, 255, 0));
                         continue;
                     }
                 }
 
-
-//
-//                if(x > AppConfig.TOF_RESAMPLING_WIDTH_MIN && x <AppConfig.TOF_RESAMPLING_WIDTH_MAX){
-//                    if(y == AppConfig.TOF_RESAMPLING_HEIGHT_MIN || y == AppConfig.TOF_RESAMPLING_HEIGHT_MAX){
-//                        bitmap.setPixel(x, y, Color.argb(255, 255, 0, 0));
-//                        continue;
-//                    }
-//                }
-//
-//                if(y > AppConfig.TOF_RESAMPLING_HEIGHT_MIN  && y <AppConfig.TOF_RESAMPLING_HEIGHT_MAX){
-//                    if(x == AppConfig.TOF_RESAMPLING_WIDTH_MIN || x == AppConfig.TOF_RESAMPLING_WIDTH_MAX){
-//                        bitmap.setPixel(x, y, Color.argb(255, 255, 0, 0));
-//                        continue;
-//                    }
-//                }
 
 
                 if(mask[index] == 0){

@@ -590,12 +590,13 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
     @Override
     public void onCargoVolume(int volume, int[] matrix) {
-        if(mCargoStatus == 0) {
-            mCurrentCargoVolume = volume;
-            mCurrentCargoVolumeMatrix = matrix;
-            Log.e("matrix10x1", Arrays.toString(mCurrentCargoVolumeMatrix));
-        }
+//        if(mCargoStatus == 0) {
+//            mCurrentCargoVolume = volume;
+//            mCurrentCargoVolumeMatrix = matrix;
+//            Log.e("matrix10x1", Arrays.toString(mCurrentCargoVolumeMatrix));
+//        }
 
+        setCargoAddress( Arrays.toString(matrix));
     }
 
 
