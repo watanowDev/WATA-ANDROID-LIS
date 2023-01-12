@@ -3,6 +3,7 @@ package com.example.androidLIS;
 import static com.budiyev.android.codescanner.ScanMode.*;
 
 import android.Manifest;
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -15,8 +16,10 @@ import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.RectF;
 import android.graphics.drawable.ColorDrawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
+import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.TextureView;
@@ -43,6 +46,7 @@ import com.example.androidLIS.model.CargoData;
 import com.example.androidLIS.model.ResponseData;
 import com.example.androidLIS.network.RetrofitClient;
 import com.example.androidLIS.network.RetrofitService;
+import com.example.androidLIS.permission.PermissionHelper;
 import com.example.androidLIS.service.BluetoothService;
 import com.example.androidLIS.tof.Camera;
 import com.example.androidLIS.tof.DepthFrameAvailableListener;
@@ -63,6 +67,7 @@ import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.schedulers.Schedulers;
 import retrofit2.Response;
+import timber.log.Timber;
 
 /*  This is an example of getting and processing ToF data.
 
@@ -73,6 +78,7 @@ import retrofit2.Response;
 public class MainActivity extends AppCompatActivity implements DepthFrameVisualizer {
 
     private TerabeeSdk.DeviceType mCurrentType = TerabeeSdk.DeviceType.AUTO_DETECT;
+    private PermissionHelper permissionHelper;
 
 
     public static final int CAM_PERMISSIONS_REQUEST = 0;
@@ -217,7 +223,8 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         /**
          * 권한 체크
          */
-        checkCamPermissions();
+        onCheckPermission();
+//        checkCamPermissions();
         rawDataView = findViewById(R.id.rawData);
         mCargoDepth = (TextView) findViewById(R.id.CargoDepth);
         mCargoExpect = (LinearLayout) findViewById(R.id.CargoExpect);
@@ -336,7 +343,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                 @Override
                 public void onReceivedData(byte[] bytes, int i, int i1) {
                     // received raw data from the sensor
-//                    Log.d("TerabeeLog",AppUtil.getInstance().byteArrayToHex(bytes));
+                    Log.d("TerabeeLog",AppUtil.getInstance().byteArrayToHex(bytes));
                 }
             };
 
@@ -361,7 +368,8 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                     public void permission(boolean granted) {
 
                     }
-                }, TerabeeSdk.DeviceType.EVO_60M);
+//                }, TerabeeSdk.DeviceType.EVO_60M);
+                }, mCurrentType);
             } catch (Exception e) {
                 Log.e("Terabee", e.getMessage());
             }
@@ -399,7 +407,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     @Override
     public void onRawDataAvailable(Bitmap bitmap) {
         renderBitmapToTextureView(bitmap, rawDataView);
-
     }
 
     @Override
@@ -445,7 +452,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                 break;
 
             case 1://짐이 있던 상황
-                if ((now - mCurrentLoadIn) > 2000 && (now - mCurrentPosition.time) < 4000 && mCurrentLoadIn != 0) {
+                if ((now - mCurrentLoadIn) > 5000 && (now - mCurrentPosition.time) < 5000 && mCurrentLoadIn != 0) {
                     this.mCurrentLoadIn = 0;
                     //선반에 있는 짐을 실은 상황
                     /**
@@ -457,6 +464,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                     text = "( IN )\nadr:" + mCurrentPosition.address + "\nName :" + mCurrentLoadCargo + "\nHeight:" + mCurrentPosition.floor + "\nvolume:" + mLoadInCargoVolume;
                     viewShortToast(text);
                     mLogText = mLogText + "\n[" + formatTime + "]\n" + text + "\n";
+                    int[] defaultMatrix ={0,0,0,0,0,0,0,0,0,0};
 
                     //백엔드 연동 추가
                     platformActionInfoMessage(new ActionInfoReqData(new ActionInfo(AppConfig.WORK_LOCATION_ID
@@ -468,9 +476,10 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                             , "0"
                             , String.valueOf(AppConfig.MATRIX_X)
                             , String.valueOf(AppConfig.MATRIX_Y)
-                            , mCurrentCargoVolumeMatrix)));
+                            , defaultMatrix)));
                     setCargoAddress(mCurrentPosition.address);
-                } else if (mCurrentLoadIn != 0 && (now - mCurrentLoadIn) > 3500) {//선반이 아닌 곳의 짐을 실음
+                } else if (mCurrentLoadIn != 0 && (now - mCurrentLoadIn) > 4000) {//선반이 아닌 곳의 짐을 실음
+                    int[] defaultMatrix ={0,0,0,0,0,0,0,0,0,0};
                     this.mCurrentLoadIn = 0;
                     setCargoAddress("field");
                     text = "( IN )\nadr:" + "field" + "\nName :" + mCurrentLoadCargo + "\nHeight:" + "1" + "\nvolume:" + mLoadInCargoVolume;
@@ -486,7 +495,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                             , String.valueOf(mLoadInCargoVolume)
                             , String.valueOf(AppConfig.MATRIX_X)
                             , String.valueOf(AppConfig.MATRIX_Y)
-                            , mCurrentCargoVolumeMatrix)));
+                            , defaultMatrix)));
                 }
 
 
@@ -503,8 +512,8 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                 break;
 
             case 2://최근에 짐을 내린 상황
-                if ((now - mCurrentLoadOut) > 2000 && (now - mCurrentPosition.time) < 4000) {
-                    //내린 선반 입력
+                if ((now - mCurrentPosition.time) < 5000) {
+                    //내린 선반 입력''''
                     text = "( OUT )\nadr:" + mCurrentPosition.address + "\nName :" + mCurrentLoadCargo + "\nHeight:" + mCurrentPosition.floor + "\nvolume:" + mLoadInCargoVolume;
                     viewShortToast(text);
                     mLogText = mLogText + "\n[" + formatTime + "]\n" + text + "\n";
@@ -521,10 +530,9 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                             , mCurrentCargoVolumeMatrix)));
 
                     mLoadInCargoVolume = 0;
-                    Arrays.fill(mCurrentCargoVolumeMatrix,10);
                     this.mCargoStatus = 0;
                     mCurrentLoadCargo = "cargo";
-                } else if ((now - mCurrentLoadOut) > 3500) {
+                } else if ((now - mCurrentLoadOut) > 2000) {
                     //선반이 아닌곳에 내림
 //                    mCurrentPosition = new PositionData(1,"field",now);
                     setCargoAddress("field");
@@ -545,7 +553,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                             , String.valueOf(AppConfig.MATRIX_Y)
                             , mCurrentCargoVolumeMatrix)));
                     mLoadInCargoVolume = 0;
-                    Arrays.fill(mCurrentCargoVolumeMatrix,10);
                     this.mCargoStatus = 0;
                     mCurrentLoadCargo = "cargo";
                 }else if(status){
@@ -583,8 +590,12 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
     @Override
     public void onCargoVolume(int volume, int[] matrix) {
-        mCurrentCargoVolume = volume;
-        mCurrentCargoVolumeMatrix = matrix;
+        if(mCargoStatus == 0) {
+            mCurrentCargoVolume = volume;
+            mCurrentCargoVolumeMatrix = matrix;
+            Log.e("matrix10x1", Arrays.toString(mCurrentCargoVolumeMatrix));
+        }
+
     }
 
 
@@ -635,7 +646,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
             mCodeScanner = new CodeScanner(this,scannerView,0);
 //            mCodeScanner.setView(scannerView);
             mCodeScanner.setScanMode(CONTINUOUS);
-            mCodeScanner.setAutoFocusEnabled(false);
+            mCodeScanner.setAutoFocusEnabled(true);
             mCodeScanner.setZoom(0);
 //            mCodeScanner.setCamera(-1);
             Log.d("scanner", "set");
@@ -645,6 +656,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                     if(mCargoStatus == 0) {
                         mCargo.setName(result.getText());
                         mCargo.setTime(System.currentTimeMillis());
+                        Log.d("scanner", result.getText());
                         setQRtext(result.getText());
                     }
 
@@ -852,6 +864,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
     public void connBLE(){
         if(!mBleScan) {
+            Log.e("connBle" , "start");
             mBleConnReq = true;
             Intent _intent = new Intent(BluetoothService.BLE_ACTION_CONNECT);
             _intent.putExtra(BluetoothService.DEVICE_ADDRESS, AppConfig.RFID_MAC);
@@ -1238,7 +1251,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                     @Override
                     public void onSuccess(Response<ResponseData>response) {
                         ResponseData res = response.body();
-
                     }
 
                     @Override
@@ -1345,6 +1357,26 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         if (Hawk.contains("MATRIX_Y")) {
             AppConfig.MATRIX_Y = Integer.parseInt(Hawk.get("MATRIX_Y").toString());
         }
+
+        // 포크 샘플링
+        if (Hawk.contains("TOF_FORK_LENGTH")) {
+            AppConfig.TOF_FORK_LENGTH = Integer.parseInt(Hawk.get("TOF_FORK_LENGTH").toString());
+        }
+        if (Hawk.contains("TOF_FORK_THICKNESS")) {
+            AppConfig.TOF_FORK_THICKNESS = Integer.parseInt(Hawk.get("TOF_FORK_THICKNESS").toString());
+        }
+        if (Hawk.contains("TOF_FORK_GAP")) {
+            AppConfig.TOF_FORK_GAP = Integer.parseInt(Hawk.get("TOF_FORK_GAP").toString());
+        }
+
+        //부피 샘플링
+        if (Hawk.contains("TOF_RESAMPLING_VOLUME_WIDTH")) {
+            AppConfig.TOF_RESAMPLING_VOLUME_WIDTH = Integer.parseInt(Hawk.get("TOF_RESAMPLING_VOLUME_WIDTH").toString());
+        }
+        if (Hawk.contains("TOF_RESAMPLING_VOLUME_HEIGHT")) {
+            AppConfig.TOF_RESAMPLING_VOLUME_HEIGHT = Integer.parseInt(Hawk.get("TOF_RESAMPLING_VOLUME_HEIGHT").toString());
+        }
+
     }
 
     public void settingParameter(View v){
@@ -1452,6 +1484,52 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
 
 
+    public void settingSampling(View v){
+        switch (v.getId()){
+            case R.id.sampling_fork_gap_add:
+                AppConfig.TOF_FORK_GAP++;
+                Hawk.put("TOF_FORK_GAP", AppConfig.TOF_FORK_GAP);
+                break;
+            case R.id.sampling_fork_gap_reduce:
+                AppConfig.TOF_FORK_GAP--;
+                Hawk.put("TOF_FORK_GAP", AppConfig.TOF_FORK_GAP);
+                break;
+            case R.id.sampling_fork_length_add:
+                AppConfig.TOF_FORK_LENGTH++;
+                Hawk.put("TOF_FORK_LENGTH", AppConfig.TOF_FORK_LENGTH);
+                break;
+            case R.id.sampling_fork_length_reduce:
+                AppConfig.TOF_FORK_LENGTH--;
+                Hawk.put("TOF_FORK_LENGTH", AppConfig.TOF_FORK_LENGTH);
+                break;
+            case R.id.sampling_fork_thickness_add:
+                AppConfig.TOF_FORK_THICKNESS++;
+                Hawk.put("TOF_FORK_THICKNESS", AppConfig.TOF_FORK_THICKNESS);
+                break;
+            case R.id.sampling_fork_thickness_reduce:
+                AppConfig.TOF_FORK_THICKNESS--;
+                Hawk.put("TOF_FORK_THICKNESS", AppConfig.TOF_FORK_THICKNESS);
+                break;
+
+            case R.id.sampling_volume_height_add:
+                AppConfig.TOF_RESAMPLING_VOLUME_HEIGHT++;
+                Hawk.put("TOF_RESAMPLING_VOLUME_HEIGHT", AppConfig.TOF_RESAMPLING_VOLUME_HEIGHT);
+                break;
+            case R.id.sampling_volume_height_reduce:
+                AppConfig.TOF_RESAMPLING_VOLUME_HEIGHT--;
+                Hawk.put("TOF_RESAMPLING_VOLUME_HEIGHT", AppConfig.TOF_RESAMPLING_VOLUME_HEIGHT);
+                break;
+            case R.id.sampling_volume_width_add:
+                AppConfig.TOF_RESAMPLING_VOLUME_WIDTH++;
+                Hawk.put("TOF_RESAMPLING_VOLUME_WIDTH", AppConfig.TOF_RESAMPLING_VOLUME_WIDTH);
+                break;
+            case R.id.sampling_volume_width_reduce:
+                AppConfig.TOF_RESAMPLING_VOLUME_WIDTH--;
+                Hawk.put("TOF_RESAMPLING_VOLUME_WIDTH", AppConfig.TOF_RESAMPLING_VOLUME_WIDTH);
+                break;
+        }
+    }
+
 
 
     /**
@@ -1499,7 +1577,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         if(mCodeScanner != null) {
             mCodeScanner.releaseResources();
         }
-
         TerabeeSdk.getInstance().unregisterDataReceive(mDataDistanceCallback);
         disconnectDevice();
     // release Terabee SDK
@@ -1508,6 +1585,49 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         stopService(new Intent(MainActivity.this, BluetoothService.class));
         unregisterReceiver(this.mNotificationReceiver);
         super.onDestroy();
+    }
+
+    //권한 확인
+    private void onCheckPermission() {
+        if (Build.VERSION.SDK_INT >= 23) {
+            permissionHelper = new PermissionHelper(this,
+                    new String[]{
+                            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                            Manifest.permission.READ_EXTERNAL_STORAGE,
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                            Manifest.permission.INTERNET,
+                            Manifest.permission.ACCESS_NETWORK_STATE,
+                            Manifest.permission.BLUETOOTH,
+                            Manifest.permission.BLUETOOTH_ADMIN,
+                            Manifest.permission.CAMERA}, 100);
+            permissionHelper.request(new PermissionHelper.PermissionCallback() {
+                @Override
+                public void onPermissionGranted() {
+                    Timber.d("onPermissionGranted() called");
+                }
+
+                @Override
+                public void onIndividualPermissionGranted(String[] grantedPermission) {
+                    Timber.d("onIndividualPermissionGranted() called with: grantedPermission = [" + TextUtils.join(",", grantedPermission) + "]");
+                }
+
+                @Override
+                public void onPermissionDenied() {
+                    Timber.d("onPermissionDenied() called");
+                    Toast.makeText(getApplicationContext(), "권한 허용 후 해당 서비스를 이용하실 수 있습니다.\\n\\'설정\\'을 통해 권한 허용을 해주시기 바랍니다.", Toast.LENGTH_SHORT).show();
+                }
+
+                @Override
+                public void onPermissionDeniedBySystem() {
+                    Timber.d("onPermissionDeniedBySystem() called");
+                    permissionHelper.openAppDetailsActivity();
+                }
+            });
+        } else {
+            //onStartMain();
+            //checkBluetooth();
+        }
     }
 
 

@@ -18,17 +18,25 @@ public class AppConfig {
 
 
     public static int FORK_LENGTH = 1300;
-    public static int PICK_THRESHOLD = 500;
+    public static int PICK_THRESHOLD = 1000;
 
 
     public static int TOF_WIDTH = 320;
-    public static int TOF_RESAMPLING_WIDTH_MIN = 142; //37
-    public static int TOF_RESAMPLING_WIDTH_MAX = 179;
+    public static int TOF_RESAMPLING_WIDTH_MIN = 32; //37
+    public static int TOF_RESAMPLING_WIDTH_MAX = 69;
 
 
     public static int TOF_HEIGHT = 240;
     public static int TOF_RESAMPLING_HEIGHT_MIN = 102; //37
     public static int TOF_RESAMPLING_HEIGHT_MAX = 139;
+
+    public static int TOF_FORK_LENGTH = 30;
+    public static int TOF_FORK_THICKNESS = 20;
+    public static int TOF_FORK_GAP = 40;
+
+    public static int TOF_RESAMPLING_VOLUME_HEIGHT = 300;
+    public static int TOF_RESAMPLING_VOLUME_WIDTH = 200;
+
 
 
     public static int MATRIX_X = 10;

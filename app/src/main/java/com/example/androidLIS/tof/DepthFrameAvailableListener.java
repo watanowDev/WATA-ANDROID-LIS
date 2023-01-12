@@ -11,6 +11,7 @@ import com.example.androidLIS.MainActivity;
 import com.example.androidLIS.util.AppConfig;
 
 import java.nio.ShortBuffer;
+import java.util.Arrays;
 
 public class DepthFrameAvailableListener implements ImageReader.OnImageAvailableListener {
     private static final String TAG = DepthFrameAvailableListener.class.getSimpleName();
@@ -24,11 +25,18 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
      * mMaxResamplingNum : 샘플링 비트 수
      *
      */
-    public static int WIDTH = AppConfig.TOF_WIDTH; //240
-    public static int HEIGHT = AppConfig.TOF_HEIGHT; //180
+    public static int WIDTH = AppConfig.TOF_WIDTH; //320
+    public static int HEIGHT = AppConfig.TOF_HEIGHT; //240
     public int[] mResamplingIndexY = {AppConfig.TOF_RESAMPLING_HEIGHT_MIN, AppConfig.TOF_RESAMPLING_HEIGHT_MAX};
     public int[] mResamplingIndexX = {AppConfig.TOF_RESAMPLING_WIDTH_MIN, AppConfig.TOF_RESAMPLING_WIDTH_MAX};
     public int mMaxResamplingNum = (mResamplingIndexX[1]-mResamplingIndexX[0])*(mResamplingIndexY[1]-mResamplingIndexY[0]);
+
+    public int mForkLength = AppConfig.TOF_FORK_LENGTH;
+    public int mForkThickness = AppConfig.TOF_FORK_THICKNESS;
+    public int mForkGap = AppConfig.TOF_FORK_GAP;
+
+    public int mResamplingHeight =AppConfig.TOF_RESAMPLING_VOLUME_HEIGHT;
+    public int mResamplingWidth =AppConfig.TOF_RESAMPLING_VOLUME_WIDTH;
 
     private static float RANGE_MIN = 0.0f;
     private static float RANGE_MAX = 4000.0f;
@@ -64,8 +72,8 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
         this.depthFrameVisualizer = depthFrameVisualizer;
         int size = WIDTH * HEIGHT;
         rawMask = new int[size];
-        mMatrixWidth = (int)WIDTH/10;
-        mMatrixHeight = (int)HEIGHT/10;
+        mMatrixWidth = Math.floorDiv(WIDTH,10);
+        mMatrixHeight =  Math.floorDiv(HEIGHT,10);
     }
 
     @Override
@@ -110,44 +118,20 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
         }
     }
 
-//
-//    private void publishNoiseReduction() {
-//        if (depthFrameVisualizer != null) {
-//            Bitmap bitmap = convertToRGBBitmap(noiseReduceMask);
-//            depthFrameVisualizer.onNoiseReductionAvailable(bitmap);
-//            bitmap.recycle();
-//        }
-//    }
-//
-//    private void publishMovingAverage() {
-//        if (depthFrameVisualizer != null) {
-//            Bitmap bitmap = convertToRGBBitmap(averagedMask);
-//            depthFrameVisualizer.onMovingAverageAvailable(bitmap);
-//            bitmap.recycle();
-//        }
-//    }
-//
-//    private void publishBlurredMovingAverage() {
-//        if (depthFrameVisualizer != null) {
-//            Bitmap bitmap = convertToRGBBitmap(blurredAverage);
-//            depthFrameVisualizer.onBlurredMovingAverageAvailable(bitmap);
-//            bitmap.recycle();
-//        }
-//    }
-
     private void processImage(Image image) {
         ShortBuffer shortDepthBuffer = image.getPlanes()[0].getBuffer().asShortBuffer();
 //        int[] mask = new int[WIDTH * HEIGHT];
 //        int[] noiseReducedMask = new int[WIDTH * HEIGHT];
-//        int[][] matrix = {  {0,0,0,0,0,0,0,0,0,0},
-//                            {0,0,0,0,0,0,0,0,0,0},
-//                            {0,0,0,0,0,0,0,0,0,0},
-//                            {0,0,0,0,0,0,0,0,0,0},
-//                            {0,0,0,0,0,0,0,0,0,0},
-//                            {0,0,0,0,0,0,0,0,0,0},
-//                            {0,0,0,0,0,0,0,0,0,0},
-//                            {0,0,0,0,0,0,0,0,0,0},
-//                            {0,0,0,0,0,0,0,0,0,0}};
+        int[][] matrix = {  {0,0,0,0,0,0,0,0,0,0},
+                            {0,0,0,0,0,0,0,0,0,0},
+                            {0,0,0,0,0,0,0,0,0,0},
+                            {0,0,0,0,0,0,0,0,0,0},
+                            {0,0,0,0,0,0,0,0,0,0},
+                            {0,0,0,0,0,0,0,0,0,0},
+                            {0,0,0,0,0,0,0,0,0,0},
+                            {0,0,0,0,0,0,0,0,0,0},
+                            {0,0,0,0,0,0,0,0,0,0},
+                            {0,0,0,0,0,0,0,0,0,0}};
 
         long now = System.currentTimeMillis();
         int totalDepth = 0;
@@ -165,8 +149,20 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
                     rawMask[(HEIGHT - y - 1) * WIDTH + (WIDTH - x - 1)] = (int) normalizeRange(depth);
                 }
 
-                if (x > mResamplingIndexX[0] && x < mResamplingIndexX[1]) {
-                    if (y > mResamplingIndexY[0] && y < mResamplingIndexY[1]) {
+//                if (x < (WIDTH-mResamplingIndexX[0]) && x > (WIDTH-mResamplingIndexX[1])) {
+//                    if (y < (HEIGHT-mResamplingIndexY[0]) && y > (HEIGHT-mResamplingIndexY[1])) {
+//                        if (depth != 0) {
+//                            totalDepth += depth;
+//                            depthNum++;
+//                        }
+//                    }
+//                }
+
+                if (x >= (WIDTH - AppConfig.TOF_FORK_LENGTH)) {
+                    if ((y >= ((HEIGHT / 2) - (AppConfig.TOF_FORK_GAP + AppConfig.TOF_FORK_THICKNESS)) &&
+                            y <= (HEIGHT / 2) - (AppConfig.TOF_FORK_GAP)) ||
+                            (y <= ((HEIGHT / 2) + (AppConfig.TOF_FORK_GAP + AppConfig.TOF_FORK_THICKNESS)) &&
+                                    y >= (HEIGHT / 2) + (AppConfig.TOF_FORK_GAP))) {
                         if (depth != 0) {
                             totalDepth += depth;
                             depthNum++;
@@ -174,11 +170,14 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
                     }
                 }
 
+
+
                 if (mSamplingDistance != 0) {
                     totalVolume++;
-                    if (depth > (mSamplingDistance - 150) && depth < (mSamplingDistance + 150)) {
+//                    if (depth > (mSamplingDistance - 150) && depth < (mSamplingDistance + 150)) {
+                    if(depth < mSamplingDistance){
                         sampleVolume++;
-//                        matrix[(int)x/mMatrixWidth][(int)y/mMatrixHeight]++;
+                        matrix[Math.floorDiv(x,mMatrixWidth)][Math.floorDiv(HEIGHT -y-1,mMatrixHeight)]++;
                     }
                 }
             }
@@ -191,12 +190,21 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
         avgDepth = getAverageDepth(totalDepth,depthNum);
         mSamplingDistance =  (int)(avgDepth/10)*10;
 
-        if(mSamplingDistance < (AppConfig.FORK_LENGTH-470) && mSamplingDistance > (AppConfig.FORK_LENGTH-530) && !currentStatus){
-            double vol = ((sampleVolume*1.0f)/(totalVolume*1.0f))*100.0f;
-//            sendCargoVolume((int)(20.0f+(80.0f*(vol/100.0f))), getMatrixData(matrix));
-            int[] matrix = {0,0,0,0,0,0,0,0,0,0};
-            sendCargoVolume((int)(20.0f+(80.0f*(vol/100.0f))), matrix);
+//        if(mSamplingDistance < (AppConfig.FORK_LENGTH-470) && mSamplingDistance > (AppConfig.FORK_LENGTH-530) && !currentStatus){
+        if(mSamplingDistance < (AppConfig.FORK_LENGTH-250) && mSamplingDistance > (AppConfig.FORK_LENGTH-300) && !currentStatus){
 
+                double vol = ((sampleVolume*1.0f)/(totalVolume*1.0f))*100.0f;
+
+//            for(int i = 0 ; i < 10 ; i++){
+//                Log.e("matrixw10x10",Arrays.toString(matrix[i]));
+//            }
+//            Log.e("matrixw10x10","=====================================");
+
+//            sendCargoVolume((int)(20.0f+(80.0f*(vol/100.0f))), getMatrixData(matrix));
+//            sendCargoVolume((int)vol-15, getMatrixData(matrix));
+            sendCargoVolume((int)vol-15, getMatrixDataFromVolume((int)vol-15));
+//            int[] matrix = {0,0,0,0,0,0,0,0,0,0};
+//            sendCargoVolume((int)(20.0f+(80.0f*(vol/100.0f))), matrix);
         }
 
 
@@ -261,37 +269,59 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
                 int index = y * WIDTH + x;
 
 
-
-//
-//                if(y == 20 || y == 220){
-//                    bitmap.setPixel(x, y, Color.argb(255, 0, 255, 0));
-//                    continue;
-//                }
-
-//                if(x%10 == 0){S
-//                    bitmap.setPixel(x, y, Color.argb(255, 0, 255, 0));
-//                    continue;
-//                }
-//
-//                if(y%10 == 0){
-//                    bitmap.setPixel(x, y, Color.argb(255, 0, 255, 0));
-//                    continue;
-//                }
-
-
-                if(x > AppConfig.TOF_RESAMPLING_WIDTH_MIN && x <AppConfig.TOF_RESAMPLING_WIDTH_MAX){
-                    if(y == AppConfig.TOF_RESAMPLING_HEIGHT_MIN || y == AppConfig.TOF_RESAMPLING_HEIGHT_MAX){
+                if(y < 120-AppConfig.TOF_FORK_GAP && y > 120-(AppConfig.TOF_FORK_GAP+AppConfig.TOF_FORK_THICKNESS)){
+                    if(x == AppConfig.TOF_FORK_LENGTH ){
                         bitmap.setPixel(x, y, Color.argb(255, 255, 0, 0));
                         continue;
                     }
                 }
 
-                if(y > AppConfig.TOF_RESAMPLING_HEIGHT_MIN  && y <AppConfig.TOF_RESAMPLING_HEIGHT_MAX){
-                    if(x == AppConfig.TOF_RESAMPLING_WIDTH_MIN || x == AppConfig.TOF_RESAMPLING_WIDTH_MAX){
+                if(y > 120+AppConfig.TOF_FORK_GAP && y < 120+(AppConfig.TOF_FORK_GAP+AppConfig.TOF_FORK_THICKNESS)){
+                    if(x == AppConfig.TOF_FORK_LENGTH ){;
                         bitmap.setPixel(x, y, Color.argb(255, 255, 0, 0));
                         continue;
                     }
                 }
+
+
+                if(x <= AppConfig.TOF_FORK_LENGTH){
+                    if(y == 120+AppConfig.TOF_FORK_GAP || y == 120+(AppConfig.TOF_FORK_GAP+AppConfig.TOF_FORK_THICKNESS) ||
+                            y == 120-AppConfig.TOF_FORK_GAP || y == 120-(AppConfig.TOF_FORK_GAP+AppConfig.TOF_FORK_THICKNESS)){
+                        bitmap.setPixel(x, y, Color.argb(255, 255, 0, 0));
+                        continue;
+                    }
+                }
+
+
+                if(y <= 120+(AppConfig.TOF_RESAMPLING_VOLUME_WIDTH/2) && y >= 120-(AppConfig.TOF_RESAMPLING_VOLUME_WIDTH/2)){
+                    if(x == AppConfig.TOF_RESAMPLING_VOLUME_HEIGHT ){
+                        bitmap.setPixel(x, y, Color.argb(255, 0, 255, 0));
+                        continue;
+                    }
+                }
+
+                if(x <= AppConfig.TOF_RESAMPLING_VOLUME_HEIGHT){
+                    if(y == 120+(AppConfig.TOF_RESAMPLING_VOLUME_WIDTH/2) || y == 120-(AppConfig.TOF_RESAMPLING_VOLUME_WIDTH/2) ){
+                        bitmap.setPixel(x, y, Color.argb(255, 0, 255, 0));
+                        continue;
+                    }
+                }
+
+
+//
+//                if(x > AppConfig.TOF_RESAMPLING_WIDTH_MIN && x <AppConfig.TOF_RESAMPLING_WIDTH_MAX){
+//                    if(y == AppConfig.TOF_RESAMPLING_HEIGHT_MIN || y == AppConfig.TOF_RESAMPLING_HEIGHT_MAX){
+//                        bitmap.setPixel(x, y, Color.argb(255, 255, 0, 0));
+//                        continue;
+//                    }
+//                }
+//
+//                if(y > AppConfig.TOF_RESAMPLING_HEIGHT_MIN  && y <AppConfig.TOF_RESAMPLING_HEIGHT_MAX){
+//                    if(x == AppConfig.TOF_RESAMPLING_WIDTH_MIN || x == AppConfig.TOF_RESAMPLING_WIDTH_MAX){
+//                        bitmap.setPixel(x, y, Color.argb(255, 255, 0, 0));
+//                        continue;
+//                    }
+//                }
 
 
                 if(mask[index] == 0){
@@ -314,16 +344,21 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
 
     public int[] getMatrixData(int[][] data){
         int[] result = {0,0,0,0,0,0,0,0,0,0};
-        for(int i = 0; i < 10 ; i++){
-            for(int j =0; j < 10 ; j++){
-                if(data[i][j] > ((mMatrixHeight*mMatrixWidth)/2)){
-                    result[i]++;
+        for(int w = 0; w < 10 ; w++){
+            for(int h =0; h < 10 ; h++){
+                if(data[w][h] > ((mMatrixHeight*mMatrixWidth)/2)){
+                    result[h]++;
                 }
             }
         }
         return result;
     }
 
+    public int[] getMatrixDataFromVolume(int v){
+        int[] result = new int[10];
+        Arrays.fill(result,Math.round((float) v/10));
+        return result;
+    }
 
 
 

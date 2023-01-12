@@ -380,6 +380,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:paddingLeft="10dp"
+                android:visibility="gone"
                 app:layout_constraintTop_toBottomOf="@+id/tofhLayout"
                 app:layout_constraintRight_toRightOf="parent"
                 app:layout_constraintLeft_toLeftOf="parent"

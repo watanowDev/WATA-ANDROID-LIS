@@ -149,6 +149,161 @@
                 app:layout_constraintLeft_toRightOf="@+id/setRFTAG"
                 app:layout_constraintBottom_toBottomOf="parent"/>
 
+
+
+            <LinearLayout
+                android:id="@+id/settingSamplingLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintBottom_toTopOf="@+id/settingBtn">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="포크 길이:"
+                        android:textColor="#ffffff"/>
+                    <Button
+                        android:id="@+id/sampling_fork_length_add"
+                        android:onClick="settingSampling"
+                        android:layout_width="35dp"
+                        android:layout_height="35dp"
+                        android:text="+"
+                        android:textColor="#ffffff"
+                        android:padding="0dp"
+                        />
+                    <Button
+                        android:id="@+id/sampling_fork_length_reduce"
+                        android:layout_width="35dp"
+                        android:layout_height="35dp"
+                        android:onClick="settingSampling"
+                        android:text="-"
+                        android:textColor="#ffffff"
+                        android:padding="0dp"
+                        />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="간격:"
+                        android:textColor="#ffffff"/>
+                    <Button
+                        android:id="@+id/sampling_fork_gap_add"
+                        android:layout_width="35dp"
+                        android:layout_height="35dp"
+                        android:text="+"
+                        android:onClick="settingSampling"
+                        android:textColor="#ffffff"
+                        android:padding="0dp"
+                        />
+                    <Button
+                        android:id="@+id/sampling_fork_gap_reduce"
+                        android:layout_width="35dp"
+                        android:layout_height="35dp"
+                        android:text="-"
+                        android:onClick="settingSampling"
+                        android:textColor="#ffffff"
+                        android:padding="0dp"
+                        />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="두께:"
+                        android:textColor="#ffffff"/>
+                    <Button
+                        android:id="@+id/sampling_fork_thickness_add"
+                        android:layout_width="35dp"
+                        android:layout_height="35dp"
+                        android:text="+"
+                        android:onClick="settingSampling"
+                        android:textColor="#ffffff"
+                        android:padding="0dp"
+                        />
+                    <Button
+                        android:id="@+id/sampling_fork_thickness_reduce"
+                        android:layout_width="35dp"
+                        android:layout_height="35dp"
+                        android:text="-"
+                        android:onClick="settingSampling"
+                        android:textColor="#ffffff"
+                        android:padding="0dp"
+                        />
+                </LinearLayout>
+
+
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="부피 샘플링 가로:"
+                        android:textColor="#ffffff"/>
+                    <Button
+                        android:id="@+id/sampling_volume_width_add"
+                        android:layout_width="35dp"
+                        android:layout_height="35dp"
+                        android:onClick="settingSampling"
+                        android:text="+"
+                        android:textColor="#ffffff"
+                        android:padding="0dp"
+                        />
+                    <Button
+                        android:id="@+id/sampling_volume_width_reduce"
+                        android:layout_width="35dp"
+                        android:layout_height="35dp"
+                        android:text="-"
+                        android:onClick="settingSampling"
+                        android:textColor="#ffffff"
+                        android:padding="0dp"
+                        />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="세로:"
+                        android:textColor="#ffffff"/>
+                    <Button
+                        android:id="@+id/sampling_volume_height_add"
+                        android:layout_width="35dp"
+                        android:layout_height="35dp"
+                        android:text="+"
+                        android:onClick="settingSampling"
+                        android:textColor="#ffffff"
+                        android:padding="0dp"
+                        />
+                    <Button
+                        android:id="@+id/sampling_volume_height_reduce"
+                        android:layout_width="35dp"
+                        android:layout_height="35dp"
+                        android:text="-"
+                        android:onClick="settingSampling"
+                        android:textColor="#ffffff"
+                        android:padding="0dp"
+                        />
+
+
+                    <TextView
+                        android:id="@+id/fork_sampling_distance"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginLeft="20dp"
+                        android:text="distance"
+                        android:textColor="#ffffff"/>
+                </LinearLayout>
+            </LinearLayout>
+
+
+
+
             <TextView
                 android:id="@+id/qrText"
                 android:layout_width="match_parent"

@@ -74,5 +74,8 @@ dependencies {
     // Hawk
     implementation 'com.orhanobut:hawk:2.0.1'
 
+    // Timber
+    implementation 'com.jakewharton.timber:timber:4.7.1'
+
 
 }
