@@ -36,10 +36,6 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-
-import com.apulsetech.lib.remote.service.BleRemoteService;
-import com.apulsetech.lib.remote.type.RemoteDevice;
-import com.apulsetech.lib.util.LogUtil;
 import com.budiyev.android.codescanner.CodeScanner;
 import com.budiyev.android.codescanner.CodeScannerView;
 import com.budiyev.android.codescanner.DecodeCallback;
@@ -73,7 +69,6 @@ import io.reactivex.disposables.Disposable;
 import io.reactivex.schedulers.Schedulers;
 import retrofit2.Response;
 import timber.log.Timber;
-import com.apulsetech.lib.barcode.Scanner;
 
 
 /*  This is an example of getting and processing ToF data.
