@@ -5,6 +5,8 @@ import static com.budiyev.android.codescanner.ScanMode.*;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -35,6 +37,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.apulsetech.lib.remote.service.BleRemoteService;
+import com.apulsetech.lib.remote.type.RemoteDevice;
+import com.apulsetech.lib.util.LogUtil;
 import com.budiyev.android.codescanner.CodeScanner;
 import com.budiyev.android.codescanner.CodeScannerView;
 import com.budiyev.android.codescanner.DecodeCallback;
@@ -68,6 +73,8 @@ import io.reactivex.disposables.Disposable;
 import io.reactivex.schedulers.Schedulers;
 import retrofit2.Response;
 import timber.log.Timber;
+import com.apulsetech.lib.barcode.Scanner;
+
 
 /*  This is an example of getting and processing ToF data.
 
@@ -263,22 +270,12 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         mService = RetrofitClient.getHeavyClient().create(RetrofitService.class);
         platformSendAliveMessage();
 
-//        CameraManager manager = (CameraManager) getApplicationContext().getSystemService(CAMERA_SERVICE);
-//        try {
-//            for(final String cameraID : manager.getCameraIdList()){
-//                CameraCharacteristics cameraCharacteristics = manager.getCameraCharacteristics(cameraID);
-//                int ori = cameraCharacteristics.get(CameraCharacteristics.LENS_FACING);
-//                if(ori == CameraCharacteristics.LENS_FACING_EXTERNAL) {
-//                    Log.e("EXcamaraID", cameraID);
-//                }
-//
-//                Log.e("camaraID", cameraID);
-//            }
-//        }catch (CameraAccessException e){
-//            e.printStackTrace();
-//        }
+        /**
+         * 거리센서 SDK 초기화
+         */
         TerabeeSdk.getInstance().init(this);
         TerabeeSdk.getInstance().registerDataReceive(mDataDistanceCallback);
+
 
         connectToDevice();
         /**
@@ -293,8 +290,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         camera.openFrontDepthCamera();
 
     }
-
-
 
 
     public void isconn(boolean is){
@@ -647,6 +642,8 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 //            mCodeScanner.setView(scannerView);
             mCodeScanner.setScanMode(CONTINUOUS);
             mCodeScanner.setAutoFocusEnabled(true);
+//            mCodeScanner.setTouchFocusEnabled(true);
+            mCodeScanner.setAutoFocusInterval(500);
             mCodeScanner.setZoom(0);
 //            mCodeScanner.setCamera(-1);
             Log.d("scanner", "set");
@@ -1629,7 +1626,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
             //checkBluetooth();
         }
     }
-
 
 }
 
