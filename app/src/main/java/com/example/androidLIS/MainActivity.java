@@ -20,6 +20,8 @@ import android.graphics.RectF;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
@@ -38,6 +40,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import com.apulsetech.lib.remote.service.BleRemoteService;
+import com.apulsetech.lib.remote.type.Msg;
 import com.apulsetech.lib.remote.type.RemoteDevice;
 import com.apulsetech.lib.util.LogUtil;
 import com.budiyev.android.codescanner.CodeScanner;
@@ -63,6 +66,7 @@ import com.google.zxing.Result;
 import com.orhanobut.hawk.Hawk;
 import com.terabee.sdk.TerabeeSdk;
 
+import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1526,6 +1530,48 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                 break;
         }
     }
+
+//
+//    private static class WeakHandler extends Handler {
+//        private final WeakReference<RemoteDeviceActivity> mWeakActivity;
+//
+//        private WeakHandler(RemoteDeviceActivity activity) {
+//            mWeakActivity = new WeakReference<>(activity);
+//        }
+//
+//        @Override
+//        public void handleMessage(@NonNull Message msg) {
+//            RemoteDeviceActivity activity = mWeakActivity.get();
+//            if (activity == null) {
+//                LogUtil.log(LogUtil.LV_D, D, TAG, "handleMessage() activity is null!");
+//                return;
+//            }
+//
+//            LogUtil.log(LogUtil.LV_D, D, TAG, "handleMessage() msg=" + msg.what);
+//
+//            switch (msg.what) {
+//                case Msg.BT_SPP_ADD_DEVICE: {
+//                    BluetoothDevice btDevice = (BluetoothDevice) msg.obj;
+//                    RemoteDevice device =
+//                            (msg.what == Msg.BLE_ADD_DEVICE) ?
+//                                    RemoteDevice.makeBleDevice(btDevice) :
+//                                    RemoteDevice.makeBtSppDevice(btDevice);
+//                    activity.mRemoteDeviceListAdapter.addDevice(device);
+//                    activity.mRemoteDeviceListAdapter.notifyDataSetChanged();
+//
+//                    if (!activity.mClearButton.isEnabled()) {
+//                        activity.mClearButton.setEnabled(true);
+//                    }
+//
+//                    LogUtil.log(LogUtil.LV_D, D, TAG,
+//                            "Remote device[" + device.getAddress() + "] is added.");
+//                }
+//                break;
+//            }
+//        }
+//    }
+
+
 
 
 

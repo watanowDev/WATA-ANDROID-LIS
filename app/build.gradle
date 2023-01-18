@@ -9,7 +9,12 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        multiDexEnabled true
+
     }
+
+
+
     buildTypes {
         release {
             minifyEnabled false
@@ -33,6 +38,7 @@ android {
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation fileTree(dir: 'libs', include: ['*.aar'])
 
     implementation 'androidx.appcompat:appcompat:1.1.0'
     implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
@@ -46,7 +52,6 @@ dependencies {
 
     implementation 'com.journeyapps:zxing-android-embedded:4.1.0'
 
-    implementation fileTree(dir: 'libs', include: ['*.aar'])
 //    implementation 'com.github.felHR85:UsbSerial:4.5'
 
     implementation 'com.github.felHR85:UsbSerial:6.1.0'
