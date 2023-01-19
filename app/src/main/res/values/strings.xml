@@ -1,4 +1,11 @@
 <resources>
     <string name="app_name">물류관리 시스템</string>
     <string name="action_settings">Settings</string>
+    <string name="common_alert_connecting">Connecting&#8230;</string>
+    <string name="rfid_main_message_unable_to_connect_module">Unable to connect to RFID module!</string>
+    <string name="remote_scanner_alert_remote_device_is_busy_or_in_unkown_state">Cann\'t connect to the remote deivce! The device is busy or in unknown state!</string>
+    <string name="rfid_alert_stop_inventory_failed">Failed to stop inventory!</string>
+    <string name="rfid_alert_low_battery_warning">Low battery!</string>
+    <string name="rfid_alert_start_inventory_failed">Failed to start inventory!</string>
+
 </resources>

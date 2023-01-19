@@ -8,9 +8,11 @@ import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -21,11 +23,13 @@ import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Message;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
@@ -35,13 +39,22 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.apulsetech.lib.barcode.type.BarcodeType;
+import com.apulsetech.lib.event.DeviceEvent;
+import com.apulsetech.lib.event.ReaderEventListener;
+import com.apulsetech.lib.event.ScannerEventListener;
 import com.apulsetech.lib.remote.service.BleRemoteService;
+import com.apulsetech.lib.remote.service.BtSppRemoteService;
+import com.apulsetech.lib.remote.type.ConfigValues;
 import com.apulsetech.lib.remote.type.Msg;
 import com.apulsetech.lib.remote.type.RemoteDevice;
+import com.apulsetech.lib.rfid.Reader;
+import com.apulsetech.lib.rfid.type.RfidResult;
 import com.apulsetech.lib.util.LogUtil;
 import com.budiyev.android.codescanner.CodeScanner;
 import com.budiyev.android.codescanner.CodeScannerView;
@@ -62,6 +75,7 @@ import com.example.androidLIS.tof.DepthFrameVisualizer;
 import com.example.androidLIS.model.PositionData;
 import com.example.androidLIS.util.AppConfig;
 import com.example.androidLIS.util.AppUtil;
+import com.example.androidLIS.util.WorkObserver;
 import com.google.zxing.Result;
 import com.orhanobut.hawk.Hawk;
 import com.terabee.sdk.TerabeeSdk;
@@ -86,7 +100,7 @@ import com.apulsetech.lib.barcode.Scanner;
     with output in DEPTH16. The constants can be adjusted but are made assuming this
     is being run on a Samsung S10 5G device.
  */
-public class MainActivity extends AppCompatActivity implements DepthFrameVisualizer {
+public class MainActivity extends AppCompatActivity implements DepthFrameVisualizer, ReaderEventListener {
 
     private TerabeeSdk.DeviceType mCurrentType = TerabeeSdk.DeviceType.AUTO_DETECT;
     private PermissionHelper permissionHelper;
@@ -107,13 +121,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     CodeScannerView mCodeScannerView;
 
 
-    //RFID 스캐너 BLE 패킷 정보
-    public ArrayList<byte[]> mBLEpacket;
-    //RFID 스캐너 스캔 스레드
-    public Thread mBleThread;
-    //현재 스캔 유무
-    public boolean mBleScan = false;
-
 
     public boolean mBleRFSet = false;
     public String mRFSetLog = "";
@@ -123,6 +130,18 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     //스캐너 connect 요청 횟수
     public int mBleConnFailCnt = 0;
     public boolean mBleConnReq = false;
+
+    //Apulse RFID Scanner
+    private boolean mInitialized = false;
+    private Reader mReader;
+    private boolean mInventoryStarted = false;
+    private boolean mContinuousModeEnabled = true;
+    private boolean mIgnorePC = false;
+    private BtSppRemoteService mBtSppRemoteService;
+    private final WeakHandler mHandler = new WeakHandler(this);
+    private static final int DEFAULT_SCAN_PERIOD = 120000;
+    private int mScanPeriod = DEFAULT_SCAN_PERIOD;
+    public RemoteDevice scanDevice = null;
 
 
 
@@ -212,12 +231,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     private RetrofitService mService;
 
 
-    //브로드캐스트 리시버
-    private NotificationReceiver mNotificationReceiver;
-
-
-
-
 
 
 
@@ -226,7 +239,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
 
         // Hawk
         Hawk.init(this).build();
@@ -243,7 +255,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         mDisText = (TextView) findViewById(R.id.distanceSensorText);
         mCargoFloor = (TextView) findViewById(R.id.cargoFloor);
         mCargoAddress = (TextView) findViewById(R.id.cargoAddress);
-        mBLEpacket = new ArrayList<byte[]>();
         mCurrentPosition = new PositionData(1,"field",0);
         mBLEQueue = new ArrayList<String>();
         mCargo = new CargoData("cargo",0);
@@ -262,11 +273,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
         if(android.os.Build.VERSION.SDK_INT >= 18)
             startService(new Intent(MainActivity.this, BluetoothService.class));
-        this.mNotificationReceiver = new NotificationReceiver();
-        this.registerReceiver(mNotificationReceiver, new IntentFilter(BluetoothService.BLE_ACTION_RECEIVE_DATA));
-        this.registerReceiver(mNotificationReceiver, new IntentFilter(BluetoothService.BLE_ACTION_GATT_CONNECTED));
-        this.registerReceiver(mNotificationReceiver, new IntentFilter(BluetoothService.BLE_ACTION_GATT_DISCONNECTED));
-        this.registerReceiver(mNotificationReceiver, new IntentFilter(BluetoothService.BLE_ACTION_GATT_MTU_CALLBACK));
 
         /**
          * 백엔드 통신 설정
@@ -279,9 +285,10 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
          */
         TerabeeSdk.getInstance().init(this);
         TerabeeSdk.getInstance().registerDataReceive(mDataDistanceCallback);
-
-
         connectToDevice();
+
+        bindBtSppRemoteService();
+
         /**
          * QR스캔 시작
          */
@@ -294,6 +301,39 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         camera.openFrontDepthCamera();
 
     }
+
+    private void bindBtSppRemoteService() {
+        Log.d("bindBtSppRemoteService", "bindBtSppRemoteService()");
+
+        if (mBtSppRemoteService != null) {
+            Log.d("bindBtSppRemoteService", "BT SPP service already bound.");
+        }
+
+        bindService(new Intent(this, BtSppRemoteService.class),
+                mBtSppRemoteServiceConnection, Context.BIND_AUTO_CREATE);
+    }
+
+    private void unbindBtSppRemoteService() {
+        Log.d("unbindBtSppRemoteService", "unbindBtSppRemoteService()");
+
+        if (mBtSppRemoteService != null) {
+            unbindService(mBtSppRemoteServiceConnection);
+        }
+    }
+
+    private final ServiceConnection mBtSppRemoteServiceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder binder) {
+            Log.d("mBtSppRemoteServiceConnection", "onServiceConnected() BT SPP service.");
+            mBtSppRemoteService = ((BtSppRemoteService.LocalBinder)binder).getService(mHandler);
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            Log.d("mBtSppRemoteServiceConnection", "onServiceDisconnected() BT SPP service.");
+            mBtSppRemoteService = null;
+        }
+    };
 
 
     public void isconn(boolean is){
@@ -864,298 +904,16 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
 
     public void connBLE(){
-        if(!mBleScan) {
-            Log.e("connBle" , "start");
-            mBleConnReq = true;
-            Intent _intent = new Intent(BluetoothService.BLE_ACTION_CONNECT);
-            _intent.putExtra(BluetoothService.DEVICE_ADDRESS, AppConfig.RFID_MAC);
-            sendBroadcast(_intent);
-        }
-    }
-
-    public void setRFTag(View v){
-        mBleRFSet = true;
-
-        View dialogView = getLayoutInflater().inflate(R.layout.dialog_rfid_setting, null);
-        final TextView rflogtext = dialogView.findViewById(R.id.RFLogText);
-        final EditText inputtext = dialogView.findViewById(R.id.inputText);
-        final TextView btn_ok = dialogView.findViewById(R.id.btn_ok);
-        final TextView btn_set = dialogView.findViewById(R.id.btn_set);
-        final TextView btn_check = dialogView.findViewById(R.id.btn_check);
-        final TextView inputtextSize = dialogView.findViewById(R.id.inputTextSize);
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setView(dialogView);
-        inputtext.setText("000000000000000000000000");
-
-        final AlertDialog alertDialog = builder.create();
-        alertDialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        alertDialog.show();
-        inputtext.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-
+        if (mBtSppRemoteService != null) {
+            if (mBtSppRemoteService.isScanning()) {
+                mBtSppRemoteService.stopRemoteDeviceScan();
+            } else {
+                mBtSppRemoteService.startRemoteDeviceScan(mScanPeriod);
             }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                inputtextSize.setText(""+inputtext.getText().toString().length());
-
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {
-
-            }
-        });
-
-
-        btn_set.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (inputtext.getText().toString().length() == 24) {
-                    requestWrite(inputtext.getText().toString());
-                }else{
-                    viewShortToast("글자수를 24자로 맞춰주세요");
-                }
-
-
-            }
-        });
-
-        btn_check.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                requestScan();
-                rflogtext.setText(mRFSetLog);
-            }
-        });
-
-        btn_ok.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mBleRFSet = false;
-                alertDialog.dismiss();
-            }
-        });
-
-    }
-
-    //스캐너 스캔 시작
-    public void startScanRFID(){
-        mBleScan = true;
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException ie) {
-            ie.printStackTrace();
-        }
-        if (mBleThread != null) mBleThread.interrupt();
-        mBleThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                while (mBleScan) {
-                    if(!mBleRFSet) {
-                        requestScan();
-                        try {
-                            Thread.sleep(AppConfig.RFID_SCAN_INTERVAL);
-                        } catch (InterruptedException ie) {
-                            ie.printStackTrace();
-                        }
-                    }
-                }
-
-            }
-
-        });
-
-        mBleThread.start();
-    }
-
-    //스캔 요청
-    public void requestScan(){
-//        byte[] bytearray = {(byte) 0x0A,
-//                (byte) 0x55,
-//                (byte) 0x0D
-//        };
-        byte[] bytearray = {(byte) 0x0A,
-                (byte) 0x52,
-                (byte) 0x31,
-                (byte) 0x2C,
-                (byte) 0x31,
-                (byte) 0x2C,
-                (byte) 0x39,
-                (byte) 0x0D
-        };
-        Log.d("BLE_TX_DATA", AppUtil.getInstance().byteArrayToHex(bytearray));
-        Intent _intent = new Intent(BluetoothService.BLE_ACTION_SEND_DATA);
-        _intent.putExtra(BluetoothService.BYTES_DATA, bytearray);
-        sendBroadcast(_intent);
-    }
-
-    //스캔 요청
-    public void requestWrite(String str) {
-        if(str != null) {
-            mRFSetArray = str.getBytes();
-            mRFSetCnt = 0;
+        } else {
+            Log.d("connBLE","BT SPP Remote service is not binded!");
         }
 
-                ;
-        byte[] bytearray = {(byte) 0x0A,
-                (byte) 0x57,
-                (byte) 0x31,
-                (byte) 0x2C,
-
-                (byte) ((2+(mRFSetCnt*2))|0x30),
-                (byte) 0x2C,
-
-                (byte) 0x32,
-                (byte) 0x2C,
-
-                mRFSetArray[(mRFSetCnt*8)],
-                mRFSetArray[(mRFSetCnt*8)+1],
-                mRFSetArray[(mRFSetCnt*8)+2],
-                mRFSetArray[(mRFSetCnt*8)+3],
-
-                mRFSetArray[(mRFSetCnt*8)+4],
-                mRFSetArray[(mRFSetCnt*8)+5],
-                mRFSetArray[(mRFSetCnt*8)+6],
-                mRFSetArray[(mRFSetCnt*8)+7],
-
-                (byte) 0x0D
-        };
-        Log.d("BLE_TX_DATA", AppUtil.getInstance().byteArrayToHex(bytearray));
-        Intent _intent = new Intent(BluetoothService.BLE_ACTION_SEND_DATA);
-        _intent.putExtra(BluetoothService.BYTES_DATA, bytearray);
-        sendBroadcast(_intent);
-        if(mRFSetCnt < 3){
-            mRFSetCnt++;
-        }
-
-
-    }
-
-
-
-
-    /**
-     * 브로드 캐스트 리시버
-     * BLE 스캐너 데이터 리시버
-     * */
-    class NotificationReceiver extends BroadcastReceiver {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            byte[] _bData;
-
-            switch (intent.getAction()) {
-                case BluetoothService.BLE_ACTION_RECEIVE_DATA:
-                    _bData = intent.getExtras().getByteArray(BluetoothService.BYTES_DATA);
-                    Log.d("BLE_RX_DATA", AppUtil.getInstance().byteArrayToHex(_bData));
-                    if(mBleRFSet){
-                        if(_bData[1] == 0x57 && mRFSetCnt < 3){
-                            requestWrite(null);
-                        }else if(_bData[1] == 0x58){
-                            mRFSetCnt = 0;
-                        }
-                    }
-
-
-
-                    if (mBLEpacket.size() == 0) {
-                        if(_bData.length >= 20){
-                            int len = _bData.length;
-                            if (_bData[0] == 0x0a) {
-                                byte[] _data = Arrays.copyOfRange(_bData, 6, len);
-                                mBLEpacket.add(_data);
-                            }
-                        }else{
-                            if(mBLEQueue.size() < 20){
-                                mBLEQueue.add(null);
-                            }else{
-                                mBLEQueue.remove(0);
-                                mBLEQueue.add(null);
-                            }
-                        }
-                    } else if (mBLEpacket.size() == 1 ) {
-                        if( _bData.length >= 20){
-                            int len = _bData.length;
-                            if (_bData[len - 1] == 0x0a) {
-                                byte[] _data = Arrays.copyOfRange(_bData, 0, len - 10);
-                                mBLEpacket.add(_data);
-                                String adrressID = new String(mBLEpacket.get(0)) + new String(mBLEpacket.get(1));
-                                Log.d("BLE_DATA_ID", adrressID);
-                                if(mBleRFSet){
-                                    mRFSetLog = adrressID;
-                                }
-
-                                if(mBLEQueue.size() < 20){
-                                    mBLEQueue.add(adrressID);
-                                }else{
-                                    mBLEQueue.remove(0);
-                                    mBLEQueue.add(adrressID);
-                                }
-                                mBLEpacket.clear();
-                            }
-                        }
-
-                    }
-
-
-
-                    if(mBLEQueue.size() > 0) {
-                        String loca = guessLocation(mBLEQueue);
-                        if(loca!= null) {
-                            setCurrentAddress(loca);
-                        }
-                    }
-
-
-//                    if(mBLEQueue.size() == 20){
-//                        for(int i = 0 ; i < 20 ; i++){
-//                            if(mBLEQueue.get(i)!= null) {
-//                                Log.e("qdata", mBLEQueue.get(i));
-//                            }else{
-//                                Log.e("qdata", "null");
-//                            }
-//                        }
-//                        Log.e("qdata", "==================================");
-//
-//                        mBLEQueue.clear();
-//                    }
-                    break;
-
-                case BluetoothService.BLE_ACTION_GATT_CONNECTED:
-                    String connectdata = intent.getExtras().getString(BluetoothService.STRING_DATA);
-                    Log.d("BLE_CONNECT_RESULT", connectdata);
-                    startScanRFID();
-                    mBleConnFailCnt = 0;
-                    mBleConnReq = false;
-                    break;
-
-
-                case BluetoothService.BLE_ACTION_GATT_DISCONNECTED:
-                    String disconnectdata = intent.getExtras().getString(BluetoothService.STRING_DATA);
-                    Log.d("BLE_DISCONNECT_RESULT", disconnectdata);
-
-                    if(mBleConnFailCnt < 3 && mBleConnReq){
-                        mBleConnFailCnt++;
-                        Intent _intent = new Intent(BluetoothService.BLE_ACTION_CONNECT);
-                        _intent.putExtra(BluetoothService.DEVICE_ADDRESS, "34:86:5D:71:98:7A");
-                        sendBroadcast(_intent);
-                    }else if(mBleConnReq){
-                        mBleConnReq = false;
-                        mBleConnFailCnt = 0;
-                        Log.d("BLE_DISCONNECT_FAIL", disconnectdata);
-                    }
-
-                    break;
-                case BluetoothService.BLE_ACTION_GATT_MTU_CALLBACK:
-                    String mtudata = intent.getExtras().getString(BluetoothService.STRING_DATA);
-                    Log.d("RX_MTU_DATA", mtudata);
-                    break;
-
-                default:
-                    break;
-            }
-        }
     }
 
     /**
@@ -1165,40 +923,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
      */
 
     public String guessLocation(ArrayList<String> list){
-        ArrayList<String> dataLocation = new ArrayList<String>();
-        ArrayList<Integer> dataCount = new ArrayList<Integer>();
-
-        for(int i = 0 ; i < list.size() ; i++){
-            if(list.get(i) != null){
-                int index = dataLocation.indexOf(list.get(i));
-                if(index != -1){
-                    dataCount.set(index,dataCount.get(index)+1);
-                }else{
-                    dataLocation.add(list.get(i));
-                    dataCount.add(1);
-                }
-            }
-        }
-
-        int max = 0;
-        int maxIndex = 0;
-        for(int i =0 ; i < dataCount.size() ; i++){
-            if(dataCount.get(i) > max){
-                max = dataCount.get(i);
-                maxIndex = i;
-            }
-        }
-//        if(dataLocation.size() > 0) {
-//            Log.e("qdata_count", dataCount.get(maxIndex) + "");
-//        }
-
-        if(dataLocation.size() > 0 && dataCount.get(maxIndex) >= AppConfig.RFID_SCAN_CNT_THRESHOLD){
-            setCargoAddress(dataCount.get(maxIndex) +"/ "+ dataLocation.get(maxIndex));
-            return dataLocation.get(maxIndex);
-        }else{
-            return null;
-        }
-
+       return null;
     }
 
     /**
@@ -1219,7 +944,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                         ResponseData res = response.body();
                         if(res != null) {
                             mAliveFailCnt = 0;
-                            connBLE();
+//                            connBLE();
                             Log.d("resdata", res.toString());
                         }
                     }
@@ -1262,18 +987,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     }
 
     public void testpp(View v ){
-        int[] array = new int[100];
-        Arrays.fill(array, 1);
-        platformActionInfoMessage(new ActionInfoReqData(new ActionInfo(AppConfig.WORK_LOCATION_ID
-                , AppConfig.GET_IN
-                , AppConfig.VEHICLE_ID
-                , "DA00010001000000006D00ED"
-                , "1"
-                , mCurrentLoadCargo
-                , "90"
-                , String.valueOf(AppConfig.MATRIX_X)
-                , String.valueOf(AppConfig.MATRIX_Y)
-                , array)));
+       connBLE();
     }
 
 
@@ -1531,49 +1245,240 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         }
     }
 
-//
-//    private static class WeakHandler extends Handler {
-//        private final WeakReference<RemoteDeviceActivity> mWeakActivity;
-//
-//        private WeakHandler(RemoteDeviceActivity activity) {
-//            mWeakActivity = new WeakReference<>(activity);
-//        }
-//
-//        @Override
-//        public void handleMessage(@NonNull Message msg) {
-//            RemoteDeviceActivity activity = mWeakActivity.get();
-//            if (activity == null) {
-//                LogUtil.log(LogUtil.LV_D, D, TAG, "handleMessage() activity is null!");
-//                return;
-//            }
-//
-//            LogUtil.log(LogUtil.LV_D, D, TAG, "handleMessage() msg=" + msg.what);
-//
-//            switch (msg.what) {
-//                case Msg.BT_SPP_ADD_DEVICE: {
-//                    BluetoothDevice btDevice = (BluetoothDevice) msg.obj;
-//                    RemoteDevice device =
-//                            (msg.what == Msg.BLE_ADD_DEVICE) ?
-//                                    RemoteDevice.makeBleDevice(btDevice) :
-//                                    RemoteDevice.makeBtSppDevice(btDevice);
-//                    activity.mRemoteDeviceListAdapter.addDevice(device);
-//                    activity.mRemoteDeviceListAdapter.notifyDataSetChanged();
-//
-//                    if (!activity.mClearButton.isEnabled()) {
-//                        activity.mClearButton.setEnabled(true);
-//                    }
-//
-//                    LogUtil.log(LogUtil.LV_D, D, TAG,
-//                            "Remote device[" + device.getAddress() + "] is added.");
-//                }
-//                break;
-//            }
-//        }
-//    }
+
+    public class WeakHandler extends Handler {
+        private final WeakReference<MainActivity> mWeakActivity;
+
+        public WeakHandler(MainActivity activity) {
+            mWeakActivity = new WeakReference<>(activity);
+        }
+
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            MainActivity activity = mWeakActivity.get();
+            if (activity == null) {
+                Log.d("handleMessage()", " activity is null!");
+                return;
+            }
+            Log.d("handleMessage()", "msg=" + msg.what);
+
+
+            switch (msg.what) {
+                case Msg.BT_SPP_ADD_DEVICE:
+                    BluetoothDevice btDevice = (BluetoothDevice) msg.obj;
+                    RemoteDevice device = RemoteDevice.makeBtSppDevice(btDevice);
+                    if (device.getAddress().equals(AppConfig.RFID_MAC)) {
+                        Log.d("bleDevice",device.getRfidStatus()+"");
+                        scanDevice = device;
+                    }
+                    break;
+
+                case Msg.BT_SPP_DEVICE_INFO_RECEIVED:
+                case Msg.WIFI_DEVICE_INFO_RECEIVED:
+                    RemoteDevice.Detail detail = (RemoteDevice.Detail)msg.obj;
+                    String deviceAddress = detail.mAddress;
+                    Log.d("BT_SPP_DEVICE_INFO_RECEIVED", "info:" + deviceAddress);
+
+                    RemoteDevice remoteDevice = scanDevice;
+                    if (remoteDevice != null) {
+                        if ((msg.what == Msg.SERIAL_DEVICE_INFO_RECEIVED) ||
+                                (msg.what == Msg.USB_DEVICE_INFO_RECEIVED) ||
+                                (msg.what == Msg.BT_SPP_DEVICE_INFO_RECEIVED)) {
+                            remoteDevice.setName((detail.mDeviceName != null) ? detail.mDeviceName : detail.mModel);
+                        }
+                        remoteDevice.setDetail(detail);
+
+                        if ((remoteDevice.getStatus() != RemoteDevice.STATUS_IDLE) && !remoteDevice.forceConnectionEnabled()) {
+                            Toast.makeText(MainActivity.this,
+                                    R.string.remote_scanner_alert_remote_device_is_busy_or_in_unkown_state,
+                                    Toast.LENGTH_LONG).show();
+                            return;
+                        } else {
+                            Log.e("Connect", AppConfig.RFID_MAC + " conn success");
+                            Toast.makeText(MainActivity.this,
+                                    "Connect Success",
+                                    Toast.LENGTH_LONG).show();
+                            mBtSppRemoteService.stopRemoteDeviceScan();
+                            initialize(remoteDevice, ConfigValues.DEFAULT_REMOTE_CONNECTION_TIMEOUT_IN_MS);
+                        }
+
+
+                    }
+                    break;
+
+
+            }
+        }
+    }
+
+
+    public void initialize(RemoteDevice device, int timeout) {
+        WorkObserver.waitFor(this,
+                getString(R.string.common_alert_connecting),
+                new WorkObserver.ObservableWork() {
+                    @Override
+                    public Object run() {
+                        initializeRfid(device, timeout);
+                        return null;
+                    }
+
+                    @Override
+                    public void onWorkDone(Object result) {
+                        mInitialized = true;
+                    }
+                });
+    }
+
+
+    public void initializeRfid(RemoteDevice device, int timeout) {
+        Log.d("initRfid", "th");
+
+        mReader = Reader.getReader(this, device, false, timeout);
+        if (mReader != null) {
+            mReader.setEventListener(this);
+            if (mReader.start()) {
+                Log.d("initRfid", "reader open success!");
+                toggleInventory();
+
+            } else {
+                Log.d("initRfid", "reader open failed!");
+                mReader.destroy();
+                mReader = null;
+                Toast.makeText(this,
+                        R.string.rfid_main_message_unable_to_connect_module,
+                        Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            Log.d("initRfid", "reader instance is null!");
+
+            Toast.makeText(this,
+                    R.string.rfid_main_message_unable_to_connect_module,
+                    Toast.LENGTH_SHORT).show();
+        }
+    }
+
+
+    @Override
+    public void onReaderDeviceStateChanged(DeviceEvent state) {
+        Log.d("onReaderDeviceStateChanged", "DeviceEvent : " + state);
+
+        if (state == DeviceEvent.DISCONNECTED) {
+            mReader = null;
+        }
+    }
+
+
+    @Override
+    public void onReaderEvent(int event, int result, @Nullable String data) {
+        Log.d("onReaderEvent", "onReaderEvent(): event=" + event
+                + ", result=" + result
+                + ", data=" + data);
+
+        switch (event) {
+            case Reader.READER_CALLBACK_EVENT_INVENTORY:
+                if (result == RfidResult.SUCCESS) {
+                    if ((data != null) && mInventoryStarted) {
+                        processTagData(data);
+                    }
+                }
+                break;
+
+            case Reader.READER_CALLBACK_EVENT_START_INVENTORY:
+                if (!mInventoryStarted) {
+//                    startStopwatch();
+                    mInventoryStarted = true;
+                }
+                break;
+
+            case Reader.READER_CALLBACK_EVENT_STOP_INVENTORY:
+                if (mInventoryStarted && !mReader.isOperationRunning()) {
+                    mInventoryStarted = false;
+//                    pauseStopwatch();
+                }
+                break;
+        }
+    }
+
+
+    @Override
+    public void onReaderRemoteKeyEvent(int action, int keyCode) {
+        Log.d("onReaderRemoteKeyEvent","onReaderRemoteKeyEvent : action=" + action + " keyCode=" + keyCode);
+
+        if (keyCode == KeyEvent.KEYCODE_SHIFT_RIGHT) {
+            toggleInventory();
+        }
+    }
+
+    @Override
+    public void onReaderRemoteSettingChanged(int i, Object o) {
+
+    }
 
 
 
+    private void processTagData(String data) {
+        String epc = null;
+        String rssi = null;
+        String phase = null;
+        String fastID = null;
+        String channel = null;
 
+        String[] dataItems = data.split(";");
+        for (String dataItem : dataItems) {
+            if (dataItem.contains("rssi")) {
+                int point = dataItem.indexOf(':') + 1;
+                rssi = dataItem.substring(point);
+            } else if (dataItem.contains("phase")) {
+                int point = dataItem.indexOf(':') + 1;
+                phase = dataItem.substring(point);
+            } else if (dataItem.contains("fastID")) {
+                int point = dataItem.indexOf(':') + 1;
+                fastID = dataItem.substring(point);
+            } else if (dataItem.contains("channel")) {
+                int point = dataItem.indexOf(':') + 1;
+                channel = dataItem.substring(point);
+            } else {
+                epc = dataItem;
+            }
+        }
+
+
+        Log.d("epcResult", "rssi:" + rssi +"\n phase:"+phase +"\n channel:"+channel +"\n fastID:"+fastID+"\n epc:"+epc);
+    }
+
+    private void toggleInventory() {
+//        mInventoryButton.setEnabled(false);
+
+        int result;
+        if (mInventoryStarted) {
+            result = mReader.stopOperation();
+            if (result == RfidResult.SUCCESS) {
+                mInventoryStarted = false;
+
+            } else {
+                Toast.makeText(this,
+                        getString(R.string.rfid_alert_stop_inventory_failed)
+                                + " (" + result + ")",
+                        Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            result = mReader.startInventory(
+                    mContinuousModeEnabled,
+                    false,
+                    mIgnorePC);
+            if (result == RfidResult.SUCCESS) {
+                mInventoryStarted = true;
+            } else if (result == RfidResult.LOW_BATTERY) {
+                Toast.makeText(this,
+                        R.string.rfid_alert_low_battery_warning,
+                        Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this,
+                        R.string.rfid_alert_start_inventory_failed,
+                        Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
 
     /**
      * 뒤로가기 버튼 클릭 이벤트
@@ -1615,7 +1520,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
     @Override
     protected void onDestroy() {
-        mBleScan = false;
         mAlive = false;
         if(mCodeScanner != null) {
             mCodeScanner.releaseResources();
@@ -1624,9 +1528,9 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         disconnectDevice();
     // release Terabee SDK
         TerabeeSdk.getInstance().dispose();
+        unbindBtSppRemoteService();
 
         stopService(new Intent(MainActivity.this, BluetoothService.class));
-        unregisterReceiver(this.mNotificationReceiver);
         super.onDestroy();
     }
 

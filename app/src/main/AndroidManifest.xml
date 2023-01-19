@@ -47,19 +47,7 @@
         </activity>
 
 
-        <service android:name="com.example.androidLIS.service.BluetoothService">
-            <intent-filter>
-                <action android:name="BLE_ACTION_SERVICE_START" />
-                <action android:name="BLE_ACTION_SERVICE_STOP" />
-                <action android:name="BLE_ACTION_CONNECT" />
-                <action android:name="BLE_ACTION_SEND_DATA" />
-                <action android:name="BLE_ACTION_RECEIVE_DATA" />
-                <action android:name="BLE_ACTION_DISCONNECT" />
-                <action android:name="BLE_ACTION_GATT_CONNECTED" />
-                <action android:name="BLE_ACTION_GATT_DISCONNECTED" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </service>
+        <service android:name="com.apulsetech.lib.remote.service.BtSppRemoteService" android:exported="false"/>
 
 
     </application>
