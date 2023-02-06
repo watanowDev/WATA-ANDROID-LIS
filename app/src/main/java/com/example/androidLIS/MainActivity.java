@@ -3,16 +3,13 @@ package com.example.androidLIS;
 import static com.budiyev.android.codescanner.ScanMode.*;
 
 import android.Manifest;
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
-import android.content.BroadcastReceiver;
-import android.content.ComponentName;
+import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothManager;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -23,13 +20,9 @@ import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.IBinder;
 import android.os.Message;
-import android.text.Editable;
 import android.text.TextUtils;
-import android.text.TextWatcher;
 import android.util.Log;
-import android.view.KeyEvent;
 import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
@@ -39,32 +32,27 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import com.apulsetech.lib.barcode.type.BarcodeType;
-import com.apulsetech.lib.event.DeviceEvent;
-import com.apulsetech.lib.event.ReaderEventListener;
-import com.apulsetech.lib.event.ScannerEventListener;
-import com.apulsetech.lib.remote.service.BleRemoteService;
-import com.apulsetech.lib.remote.service.BtSppRemoteService;
 import com.apulsetech.lib.remote.type.ConfigValues;
 import com.apulsetech.lib.remote.type.Msg;
 import com.apulsetech.lib.remote.type.RemoteDevice;
-import com.apulsetech.lib.rfid.Reader;
-import com.apulsetech.lib.rfid.type.RfidResult;
-import com.apulsetech.lib.util.LogUtil;
 import com.budiyev.android.codescanner.CodeScanner;
 import com.budiyev.android.codescanner.CodeScannerView;
 import com.budiyev.android.codescanner.DecodeCallback;
+import com.example.androidLIS.ApulseRFID.ApulseRFIDInstance;
+import com.example.androidLIS.TerabeeSensor.TerabeeInstance;
 import com.example.androidLIS.model.ActionInfo;
 import com.example.androidLIS.model.ActionInfoReqData;
 import com.example.androidLIS.model.Alive;
 import com.example.androidLIS.model.AliveReqData;
 import com.example.androidLIS.model.CargoData;
+import com.example.androidLIS.model.LocationInfo;
+import com.example.androidLIS.model.LocationInfoReqData;
 import com.example.androidLIS.model.ResponseData;
+import com.example.androidLIS.model.RfidScanData;
 import com.example.androidLIS.network.RetrofitClient;
 import com.example.androidLIS.network.RetrofitService;
 import com.example.androidLIS.permission.PermissionHelper;
@@ -72,15 +60,14 @@ import com.example.androidLIS.service.BluetoothService;
 import com.example.androidLIS.tof.Camera;
 import com.example.androidLIS.tof.DepthFrameAvailableListener;
 import com.example.androidLIS.tof.DepthFrameVisualizer;
-import com.example.androidLIS.model.PositionData;
+import com.example.androidLIS.model.RackData;
 import com.example.androidLIS.util.AppConfig;
 import com.example.androidLIS.util.AppUtil;
-import com.example.androidLIS.util.WorkObserver;
 import com.google.zxing.Result;
 import com.orhanobut.hawk.Hawk;
-import com.terabee.sdk.TerabeeSdk;
 
 import java.lang.ref.WeakReference;
+import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -91,7 +78,6 @@ import io.reactivex.disposables.Disposable;
 import io.reactivex.schedulers.Schedulers;
 import retrofit2.Response;
 import timber.log.Timber;
-import com.apulsetech.lib.barcode.Scanner;
 
 
 /*  This is an example of getting and processing ToF data.
@@ -100,12 +86,9 @@ import com.apulsetech.lib.barcode.Scanner;
     with output in DEPTH16. The constants can be adjusted but are made assuming this
     is being run on a Samsung S10 5G device.
  */
-public class MainActivity extends AppCompatActivity implements DepthFrameVisualizer, ReaderEventListener {
+public class MainActivity extends AppCompatActivity implements DepthFrameVisualizer {
 
-    private TerabeeSdk.DeviceType mCurrentType = TerabeeSdk.DeviceType.AUTO_DETECT;
     private PermissionHelper permissionHelper;
-
-
     public static final int CAM_PERMISSIONS_REQUEST = 0;
     private static final String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
     private long backKeyTime = 0;
@@ -121,36 +104,23 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     CodeScannerView mCodeScannerView;
 
 
+    //Terabee sensor
+    public TerabeeInstance mTerabeeSensorInstance;
+    public TerabeeHandler mTerabeeHandler;
 
-    public boolean mBleRFSet = false;
-    public String mRFSetLog = "";
-    public byte[] mRFSetArray = new byte[24];
-    public int mRFSetCnt = 0;
+    public ApulseRFIDInstance mApulseRFIDInstance;
+    private RfidHandler mRfidHandler= new RfidHandler(this);
 
-    //스캐너 connect 요청 횟수
-    public int mBleConnFailCnt = 0;
-    public boolean mBleConnReq = false;
-
-    //Apulse RFID Scanner
-    private boolean mInitialized = false;
-    private Reader mReader;
-    private boolean mInventoryStarted = false;
-    private boolean mContinuousModeEnabled = true;
-    private boolean mIgnorePC = false;
-    private BtSppRemoteService mBtSppRemoteService;
-    private final WeakHandler mHandler = new WeakHandler(this);
-    private static final int DEFAULT_SCAN_PERIOD = 120000;
-    private int mScanPeriod = DEFAULT_SCAN_PERIOD;
-    public RemoteDevice scanDevice = null;
-
-
-
+    private BluetoothAdapter mBluetoothAdapter;
+    private boolean mBleSupported = false;
+    private static final boolean USE_USER_INTERACTIVE_PERMISSION = false;
+    private static final int REQUEST_ENABLE_BT = 1;
+    private static final int REQUEST_OVERLAY = 2;
 
     //텍스트 뷰어
     TextView mCargoDepth;
     TextView mQrText;
     TextView mDisText;
-    TextView mCargoFloor;
     TextView mCargoAddress;
 
     public TextView mRFsetLog;
@@ -170,10 +140,11 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
     /**
      * 현재 지게차 위치
-     * mCurrentPosition : 위치
+     * mCurrentRack : 선반 위치
      */
-    public PositionData mCurrentPosition;
+    public RackData mCurrentRack;
     public ArrayList<String> mBLEQueue;
+    public String LocationEPC = null;
 
 
 
@@ -223,15 +194,18 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     //백엔드 alive
     public boolean mAlive = false;
 
+
+    //Alive 스레드
+    public Thread mLocationThread;
+    //백엔드 alive
+    public boolean mLocation = false;
+
     //백엔드 alive 패킷 전송 실패 카운트
     public int mAliveFailCnt = 0;
 
 
     //백엔드 통신
     private RetrofitService mService;
-
-
-
 
 
 
@@ -253,16 +227,14 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         mCargoExpect = (LinearLayout) findViewById(R.id.CargoExpect);
         mQrText = (TextView) findViewById(R.id.qrText);
         mDisText = (TextView) findViewById(R.id.distanceSensorText);
-        mCargoFloor = (TextView) findViewById(R.id.cargoFloor);
         mCargoAddress = (TextView) findViewById(R.id.cargoAddress);
-        mCurrentPosition = new PositionData(1,"field",0);
+        mCurrentRack = new RackData(1,"field",0);
         mBLEQueue = new ArrayList<String>();
         mCargo = new CargoData("cargo",0);
         mCodeScannerView = (CodeScannerView) findViewById(R.id.scanner_view);
         mCodeScannerView.setClickable(false);
 
-
-        initSettingParams();
+        AppUtil.getInstance().initSettingParams();
 
         if(!AppUtil.getInstance().isNetworkConnected(getApplicationContext())){
             Log.d("network","not connected");
@@ -280,14 +252,58 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         mService = RetrofitClient.getHeavyClient().create(RetrofitService.class);
         platformSendAliveMessage();
 
-        /**
-         * 거리센서 SDK 초기화
-         */
-        TerabeeSdk.getInstance().init(this);
-        TerabeeSdk.getInstance().registerDataReceive(mDataDistanceCallback);
-        connectToDevice();
+        mTerabeeHandler = new TerabeeHandler();
+        mTerabeeSensorInstance = new TerabeeInstance(getApplicationContext(),mTerabeeHandler);
+        mTerabeeSensorInstance.initTerabeeSensor();
 
-        bindBtSppRemoteService();
+
+        mApulseRFIDInstance = new ApulseRFIDInstance(this,mRfidHandler);
+
+        boolean supported = getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH);
+        if (supported) {
+            final BluetoothManager bluetoothManager =
+                    (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+            if (bluetoothManager != null) {
+                mBluetoothAdapter = bluetoothManager.getAdapter();
+            }
+
+            if (mBluetoothAdapter != null) {
+                if (!mBluetoothAdapter.isEnabled()) {
+                    if (USE_USER_INTERACTIVE_PERMISSION) {
+                        Intent enableBtIntent =
+                                new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                        startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+                    } else {
+                        mBluetoothAdapter.enable();
+                    }
+
+                    Toast.makeText(this,
+                            R.string.remote_scanner_alert_turning_on_bluetooth,
+                            Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(this,
+                        R.string.remote_scanner_alert_bluetooth_not_supported,
+                        Toast.LENGTH_SHORT).show();
+            }
+
+            mBleSupported = getPackageManager()
+                    .hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE);
+            if (!mBleSupported) {
+                Toast.makeText(this,
+                        R.string.remote_scanner_alert_ble_not_supported,
+                        Toast.LENGTH_SHORT).show();
+            }else{
+                mApulseRFIDInstance.bindBtSppRemoteService();
+            }
+        } else {
+            if (mBluetoothAdapter == null) {
+                Toast.makeText(this,
+                        R.string.remote_scanner_alert_bluetooth_not_supported,
+                        Toast.LENGTH_SHORT).show();
+            }
+        }
+
 
         /**
          * QR스캔 시작
@@ -302,135 +318,175 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
     }
 
-    private void bindBtSppRemoteService() {
-        Log.d("bindBtSppRemoteService", "bindBtSppRemoteService()");
 
-        if (mBtSppRemoteService != null) {
-            Log.d("bindBtSppRemoteService", "BT SPP service already bound.");
+    /**
+     * 거리센서 데이터 핸들러
+     */
+    public class TerabeeHandler extends Handler{
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            super.handleMessage(msg);
+            Bundle bundle = msg.getData();
+            switch (bundle.getInt("type")){
+                case 1:
+                    setDistext(String.valueOf(bundle.getInt("floor")));
+                    setCurrentFloor(bundle.getInt("floor"));
+                    break;
+                case 2:
+                    isTerabeeConn(bundle.getInt("connect"));
+                    break;
+            }
         }
-
-        bindService(new Intent(this, BtSppRemoteService.class),
-                mBtSppRemoteServiceConnection, Context.BIND_AUTO_CREATE);
     }
 
-    private void unbindBtSppRemoteService() {
-        Log.d("unbindBtSppRemoteService", "unbindBtSppRemoteService()");
-
-        if (mBtSppRemoteService != null) {
-            unbindService(mBtSppRemoteServiceConnection);
-        }
-    }
-
-    private final ServiceConnection mBtSppRemoteServiceConnection = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName componentName, IBinder binder) {
-            Log.d("mBtSppRemoteServiceConnection", "onServiceConnected() BT SPP service.");
-            mBtSppRemoteService = ((BtSppRemoteService.LocalBinder)binder).getService(mHandler);
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName componentName) {
-            Log.d("mBtSppRemoteServiceConnection", "onServiceDisconnected() BT SPP service.");
-            mBtSppRemoteService = null;
-        }
-    };
-
-
-    public void isconn(boolean is){
-        if(is){
+    public void isTerabeeConn(int is){
+        if(is == 1){
             runOnUiThread(new Runnable() {
                 public void run() {
                     viewShortToast("sensor connected");
                 }
             });
-        }else{
+        }else if(is == 0){
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    viewShortToast("sensor not connected");
+                }
+            });
+        }else if(is == 2){
             runOnUiThread(new Runnable() {
                 public void run() {
                     viewShortToast("sensor disconnected");
                 }
-            });        }
+            });
+        }else if(is == 3){
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    viewShortToast("sensor error");
+                }
+            });
+        }
 
     }
+
 
     /**
-     * 거리센서 콜백함수
+     * RFID 스캐너 핸들러
      */
-    private final TerabeeSdk.DataDistanceCallback mDataDistanceCallback = new
-            TerabeeSdk.DataDistanceCallback() {
-                @Override
-                public void onDistanceReceived(int distance, int dataBandwidth, int
-                        dataSpeed) {
-                    setDistext(distance+"");
-                    setCurrentFloor(distance);
+    public class RfidHandler extends Handler {
+        private final WeakReference<MainActivity> mWeakActivity;
 
-                    if(distance <= AppConfig.FLOOR_HEIGHT){ //1층
-                        setCargoFloor("1층");
-                    }else if(distance > AppConfig.FLOOR_HEIGHT && distance <= (AppConfig.FLOOR_HEIGHT*2)){ //2층
-                        setCargoFloor("2층");
-                    }else if(distance > (AppConfig.FLOOR_HEIGHT*2) && distance <= (AppConfig.FLOOR_HEIGHT*3)){ //3층
-                        setCargoFloor("3층");
-                    }else if(distance > (AppConfig.FLOOR_HEIGHT*3) && distance <= (AppConfig.FLOOR_HEIGHT*4)) { //4층
-                        setCargoFloor("4층");
-                    }else{ //그 외
-                        setCargoFloor("1층");
-                    }
+        public RfidHandler(MainActivity activity) {
+            mWeakActivity = new WeakReference<>(activity);
+        }
 
-
-                    // received distance from the sensor
-                }
-
-                @Override
-                public void onReceivedData(byte[] bytes, int i, int i1) {
-                    // received raw data from the sensor
-                    Log.d("TerabeeLog",AppUtil.getInstance().byteArrayToHex(bytes));
-                }
-            };
-
-
-    private void connectToDevice() {
-        Thread connectThread = new Thread(() -> {
-            try {
-                TerabeeSdk.getInstance().connect(new TerabeeSdk.IUsbConnect() {
-                    @Override
-                    public void connected(boolean success, TerabeeSdk.DeviceType
-                            deviceType) {
-                        isconn(success);
-                        Log.d("Terabee", success + "");
-                    }
-
-                    @Override
-                    public void disconnected() {
-
-                    }
-
-                    @Override
-                    public void permission(boolean granted) {
-
-                    }
-//                }, TerabeeSdk.DeviceType.EVO_60M);
-                }, mCurrentType);
-            } catch (Exception e) {
-                Log.e("Terabee", e.getMessage());
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            MainActivity activity = mWeakActivity.get();
+            if (activity == null) {
+                Log.d("handleMessage()", " activity is null!");
+                return;
             }
-        });
+            Log.d("handleMessage()", "msg=" + msg.what);
+            switch (msg.what) {
+                case Msg.BT_SPP_ADD_DEVICE:
+                    BluetoothDevice btDevice = (BluetoothDevice) msg.obj;
+                    RemoteDevice device = RemoteDevice.makeBtSppDevice(btDevice);
+                    if (device.getAddress().equals(AppConfig.RFID_MAC)) {
+                        Log.d("bleDevice", device.getRfidStatus() + "");
+                        mApulseRFIDInstance.scanDevice = device;
+                    }
+                    break;
 
-        connectThread.start();
-    }
+                case Msg.BT_SPP_DEVICE_INFO_RECEIVED:
+                case Msg.WIFI_DEVICE_INFO_RECEIVED:
+                    RemoteDevice.Detail detail = (RemoteDevice.Detail) msg.obj;
+                    String deviceAddress = detail.mAddress;
+                    Log.d("BT_SPP_DEVICE_INFO_RECEIVED", "info:" + deviceAddress);
+                    if (deviceAddress.equals(AppConfig.RFID_MAC)) {
+                        RemoteDevice remoteDevice = mApulseRFIDInstance.scanDevice;
+                        if (remoteDevice != null) {
+                            if ((msg.what == Msg.SERIAL_DEVICE_INFO_RECEIVED) ||
+                                    (msg.what == Msg.USB_DEVICE_INFO_RECEIVED) ||
+                                    (msg.what == Msg.BT_SPP_DEVICE_INFO_RECEIVED)) {
+                                remoteDevice.setName((detail.mDeviceName != null) ? detail.mDeviceName : detail.mModel);
+                            }
+                            remoteDevice.setDetail(detail);
+
+                            if ((remoteDevice.getStatus() != RemoteDevice.STATUS_IDLE) && !remoteDevice.forceConnectionEnabled()) {
+                                Toast.makeText(MainActivity.this,
+                                        R.string.remote_scanner_alert_remote_device_is_busy_or_in_unkown_state,
+                                        Toast.LENGTH_LONG).show();
+                                return;
+                            } else {
+                                Log.e("Connect", AppConfig.RFID_MAC + " conn success");
+                                Toast.makeText(MainActivity.this,
+                                        "Connect Success",
+                                        Toast.LENGTH_LONG).show();
+                                String jsonDevice = remoteDevice.toGson();
+                                if (!mApulseRFIDInstance.mPreviouslyConnectedDevices.contains(jsonDevice)) {
+                                    mApulseRFIDInstance.mPreviouslyConnectedDevices.add(jsonDevice);
+                                    mApulseRFIDInstance.mSetting.setPreviouslyConnectedDevices(mApulseRFIDInstance.mPreviouslyConnectedDevices);
+                                }
+                                mApulseRFIDInstance.initialize(remoteDevice, ConfigValues.DEFAULT_REMOTE_CONNECTION_TIMEOUT_IN_MS);
+                            }
 
 
-    private void disconnectDevice() {
-        try {
-            TerabeeSdk.getInstance().disconnect();
-        } catch (Exception e) {
-            Log.e("Terabee", e.getMessage());
+                        }
+
+                    }
+                    break;
+                case AppConfig.RFID_SCAN_RESULT:
+                    ArrayList<RfidScanData> data = mApulseRFIDInstance.getScanData();
+                    if(data.size() == 0){
+                        setCargoAddress("field");
+                    }
+                    boolean onRack = isOnTheRack(data);
+                    if(onRack){
+                        for(int i = 0 ; i < data.size() ; i++){
+                            if(Integer.parseInt(data.get(i).antenna) == 0){
+                                data.remove(i);
+                                i--;
+                            }
+                        }
+                    }
+
+                    Log.e("scandata", data.size() + "");
+                    if (data.size() > 0) {
+                        double max_rssi = Integer.MIN_VALUE;
+                        int max_rssi_index = 0;
+                        for (int i = 0; i < data.size(); i++) {
+                            if (Double.parseDouble(data.get(i).rssi) > max_rssi) {
+                                max_rssi = Double.parseDouble(data.get(i).rssi);
+                                max_rssi_index = i;
+                            }
+                        }
+                        if(onRack) {
+                            setCurrentRack(data.get(max_rssi_index).epc);
+                            setCargoAddress(data.get(max_rssi_index).epc);
+                        }else{
+                            setCargoAddress("field");
+                        }
+                        LocationEPC = data.get(max_rssi_index).epc;
+
+                        if(mLocationThread == null){
+                            platformSendLocationMessage();
+                        }
+
+                    }
+                    break;
+
+            }
         }
     }
 
-    private void clearDataReceivers() {
-        TerabeeSdk.getInstance().unregisterDataReceive(mDataDistanceCallback);
+    public boolean isOnTheRack(ArrayList<RfidScanData> data){
+        for(int i = 0; i < data.size() ; i++){
+            if(Integer.parseInt(data.get(i).antenna) == 1){
+                return true;
+            }
+        }
+        return false;
     }
-
-
 
     private void checkCamPermissions() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -491,16 +547,16 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                 break;
 
             case 1://짐이 있던 상황
-                if ((now - mCurrentLoadIn) > 5000 && (now - mCurrentPosition.time) < 5000 && mCurrentLoadIn != 0) {
+                if ((now - mCurrentLoadIn) > 2000 && (now - mCurrentRack.time) < 2000 && mCurrentLoadIn != 0) {
                     this.mCurrentLoadIn = 0;
                     //선반에 있는 짐을 실은 상황
                     /**
                      * 짐의 이름 : cargoName
-                     * 현재 위치 : mCurrentPosition.address
-                     * 현재 높이 : mCurrentPosition.floor
+                     * 현재 위치 : mCurrentRack.rack
+                     * 현재 높이 : mCurrentRack.floor
                      * 현재 짐의 부피 : mCurrentCargoVolume
                      */
-                    text = "( IN )\nadr:" + mCurrentPosition.address + "\nName :" + mCurrentLoadCargo + "\nHeight:" + mCurrentPosition.floor + "\nvolume:" + mLoadInCargoVolume;
+                    text = "( IN )\nadr:" + mCurrentRack.rack + "\nName :" + mCurrentLoadCargo + "\nHeight:" + mCurrentRack.floor + "\nvolume:" + mLoadInCargoVolume;
                     viewShortToast(text);
                     mLogText = mLogText + "\n[" + formatTime + "]\n" + text + "\n";
                     int[] defaultMatrix ={0,0,0,0,0,0,0,0,0,0};
@@ -509,15 +565,15 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                     platformActionInfoMessage(new ActionInfoReqData(new ActionInfo(AppConfig.WORK_LOCATION_ID
                             , AppConfig.GET_IN
                             , AppConfig.VEHICLE_ID
-                            , mCurrentPosition.address
-                            , String.valueOf(mCurrentPosition.floor)
+                            , mCurrentRack.rack
+                            , String.valueOf(mCurrentRack.floor)
                             , mCurrentLoadCargo
                             , "0"
                             , String.valueOf(AppConfig.MATRIX_X)
                             , String.valueOf(AppConfig.MATRIX_Y)
                             , defaultMatrix)));
-                    setCargoAddress(mCurrentPosition.address);
-                } else if (mCurrentLoadIn != 0 && (now - mCurrentLoadIn) > 4000) {//선반이 아닌 곳의 짐을 실음
+                    setCargoAddress(mCurrentRack.rack);
+                } else if (mCurrentLoadIn != 0 && (now - mCurrentLoadIn) > 2000) {//선반이 아닌 곳의 짐을 실음
                     int[] defaultMatrix ={0,0,0,0,0,0,0,0,0,0};
                     this.mCurrentLoadIn = 0;
                     setCargoAddress("field");
@@ -551,17 +607,17 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                 break;
 
             case 2://최근에 짐을 내린 상황
-                if ((now - mCurrentPosition.time) < 5000) {
+                if ((now - mCurrentRack.time) < 5000) {
                     //내린 선반 입력''''
-                    text = "( OUT )\nadr:" + mCurrentPosition.address + "\nName :" + mCurrentLoadCargo + "\nHeight:" + mCurrentPosition.floor + "\nvolume:" + mLoadInCargoVolume;
+                    text = "( OUT )\nadr:" + mCurrentRack.rack + "\nName :" + mCurrentLoadCargo + "\nHeight:" + mCurrentRack.floor + "\nvolume:" + mLoadInCargoVolume;
                     viewShortToast(text);
                     mLogText = mLogText + "\n[" + formatTime + "]\n" + text + "\n";
                     //백엔드 연동 추가
                     platformActionInfoMessage(new ActionInfoReqData(new ActionInfo(AppConfig.WORK_LOCATION_ID
                             , AppConfig.GET_OUT
                             , AppConfig.VEHICLE_ID
-                            , mCurrentPosition.address
-                            , String.valueOf(mCurrentPosition.floor)
+                            , mCurrentRack.rack
+                            , String.valueOf(mCurrentRack.floor)
                             , mCargo.getName()
                             , String.valueOf(mLoadInCargoVolume)
                             , String.valueOf(AppConfig.MATRIX_X)
@@ -701,88 +757,8 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                         setQRtext(result.getText());
                     }
 
-/**QR코드 층 구분 로직 --> 160cm 이하의 선반 크기만 가능함**/
-//                    int height = scannerView.getHeight();
-//                    String[] data = result.getText().split(":");
-//                    if(data[0].contains("wata")){
-//                        long now = System.currentTimeMillis();
-//                        if(result.getResultPoints()[0].getY() > ((height*1.0f)/2.0f)){
-//                            switch (Integer.parseInt(data[1])){
-//                                case 1:
-//                                    setCurrentPosition(new PositionData(2,data[2],now));
-//                                    setQRtext(data[2]+" "+"2층");
-//                                    break;
-//                                case 2:
-//                                    setCurrentPosition(new PositionData(3,data[2],now));
-//                                    setQRtext(data[2]+" "+"3층");
-//                                    break;
-//                                case 3:
-//                                    setCurrentPosition(new PositionData(4,data[2],now));
-//                                    setQRtext(data[2]+" "+"4층");
-//                                    break;
-//                            }
-//                        }else if(result.getResultPoints()[2].getY() < ((height*1.0f)/2.0f)){
-//                            switch (Integer.parseInt(data[1])){
-//                                case 1:
-//                                    setCurrentPosition(new PositionData(1,data[2],now));
-//                                    setQRtext(data[2]+" "+"1층");
-//                                    break;
-//                                case 2:
-//                                    setCurrentPosition(new PositionData(2,data[2],now));
-//                                    setQRtext(data[2]+" "+"2층");
-//                                    break;
-//                                case 3:
-//                                    setCurrentPosition(new PositionData(3,data[2],now));
-//                                    setQRtext(data[2]+" "+"3층");
-//                                    break;
-//                            }
-//
-//                        }else{
-//                            if((result.getResultPoints()[0].getY() - ((height*1.0f)/2.0f)) > (result.getResultPoints()[2].getY() - ((height*1.0f)/2.0f))){
-//                                switch (Integer.parseInt(data[1])){
-//                                    case 1:
-//                                        setCurrentPosition(new PositionData(1,data[2],now));
-//                                        setQRtext(data[2]+" "+"1층");
-//                                        break;
-//                                    case 2:
-//                                        setCurrentPosition(new PositionData(2,data[2],now));
-//                                        setQRtext(data[2]+" "+"2층");
-//                                        break;
-//                                    case 3:
-//                                        setCurrentPosition(new PositionData(3,data[2],now));
-//                                        setQRtext(data[2]+" "+"3층");
-//                                        break;
-//                                }
-//                            }else{
-//                                switch (Integer.parseInt(data[1])){
-//                                    case 1:
-//                                        setCurrentPosition(new PositionData(2,data[2],now));
-//                                        setQRtext(data[2]+" "+"2층");
-//                                        break;
-//                                    case 2:
-//                                        setCurrentPosition(new PositionData(3,data[2],now));
-//                                        setQRtext(data[2]+" "+"3층");
-//                                        break;
-//                                    case 3:
-//                                        setCurrentPosition(new PositionData(4,data[2],now));
-//                                        setQRtext(data[2]+" "+"4층");
-//                                        break;
-//                                }
-//                            }
-//                        }
-//                    }
-
-
                 }
             });
-//            scannerView.setOnClickListener(new View.OnClickListener() {
-//                @Override
-//                public void onClick(View view) {
-//                    mCodeScanner.startPreview();
-//                    Log.d("qr","priview");
-//
-//                }
-//            });
         }else{
             Log.d("scanner", "alreadyset");
         }
@@ -813,8 +789,8 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         return mCargoStatus;
     }
 
-    public PositionData getCurrentPosition() {
-        return mCurrentPosition;
+    public RackData getCurrentRack() {
+        return mCurrentRack;
     }
 
 //    public void setCurrentPosition(PositionData mCurrentPosition) {
@@ -822,24 +798,16 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 //    }
 
     //현재 RFID 스캔 위치
-    public void setCurrentAddress(String adr){
-        this.mCurrentPosition.setAddress(adr);
-        this.mCurrentPosition.setTime(System.currentTimeMillis());
+    public void setCurrentRack(String rck){
+        this.mCurrentRack.setRack(rck);
+        this.mCurrentRack.setTime(System.currentTimeMillis());
     }
 
     //현재 거리센서 높이
     public void setCurrentFloor(int f){
-        this.mCurrentPosition.setFloor(f);
+        this.mCurrentRack.setFloor(f);
     }
 
-    //짐 높이 텍스트뷰
-    public void setCargoFloor(String s){
-        runOnUiThread(new Runnable() {
-            public void run() {
-                mCargoFloor.setText(s);
-            }
-        });
-    }
 
     //짐 위치 텍스트뷰
     public void setCargoAddress(String s){
@@ -897,24 +865,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
     }
 
-    /**
-     * BLE 연결 관련
-     */
-
-
-
-    public void connBLE(){
-        if (mBtSppRemoteService != null) {
-            if (mBtSppRemoteService.isScanning()) {
-                mBtSppRemoteService.stopRemoteDeviceScan();
-            } else {
-                mBtSppRemoteService.startRemoteDeviceScan(mScanPeriod);
-            }
-        } else {
-            Log.d("connBLE","BT SPP Remote service is not binded!");
-        }
-
-    }
 
     /**
      * RFID 스캔 데이터를 기반으로 현재 선반 위치 추측
@@ -945,7 +895,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                         if(res != null) {
                             mAliveFailCnt = 0;
 //                            connBLE();
-                            Log.d("resdata", res.toString());
+                            Log.d("AliveResdata", res.toString());
                         }
                     }
 
@@ -967,7 +917,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
      * @param data
      */
     public void platformActionInfoMessage(ActionInfoReqData data){
-        ResponseData res;
         mService.ACTION_INFO_MESSAGE(data).subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(new SingleObserver<Response<ResponseData>>() {
@@ -977,6 +926,9 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                     @Override
                     public void onSuccess(Response<ResponseData>response) {
                         ResponseData res = response.body();
+                        if(res != null) {
+                            Log.d("ActionInfoResdata", res.toString());
+                        }
                     }
 
                     @Override
@@ -986,15 +938,48 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                 });
     }
 
+
+    /**
+     * 백엔드 연동 테스트
+     * Location 패킷 전송
+     * @param data
+     */
+    public void platformLocationMessage(LocationInfoReqData data){
+        mService.LOCATION_INFO_MESSAGE(data).subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new SingleObserver<Response<ResponseData>>() {
+                    @Override
+                    public void onSubscribe(Disposable d) {
+                    }
+                    @Override
+                    public void onSuccess(Response<ResponseData>response) {
+                        ResponseData res = response.body();
+                        if(res != null) {
+                            Log.d("LocationInfoResdata", res.toString());
+                        }
+                    }
+
+                    @Override
+                    public void onError(Throwable e) {
+
+                    }
+                });
+    }
+
+
+
     public void testpp(View v ){
-       connBLE();
+       mApulseRFIDInstance.startScan();
     }
 
 
     //플랫폼 alive 신호 전송
     public void platformSendAliveMessage(){
         mAlive = true;
-        if (mAliveThread != null) mAliveThread.interrupt();
+        if (mAliveThread != null){
+            mAliveThread.interrupt();
+            mAliveThread = null;
+        }
         mAliveThread = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -1013,6 +998,31 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         mAliveThread.start();
     }
 
+    //플랫폼 Location 정보 전송
+    public void platformSendLocationMessage(){
+        mLocation = true;
+        if (mLocationThread != null){
+            mLocationThread.interrupt();
+            mLocationThread = null;
+        }
+        mLocationThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                while (mLocation) {
+                    platformLocationMessage(new LocationInfoReqData(new LocationInfo(AppConfig.WORK_LOCATION_ID,AppConfig.VEHICLE_ID,LocationEPC)));
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException ie) {
+                        ie.printStackTrace();
+                    }
+                }
+            }
+
+        });
+        mLocationThread.start();
+    }
+
+
 
     //플랫폼 alive 신호 전송
     public void platformSendErrorMessage(String errorCode){
@@ -1021,78 +1031,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
 
 
-
-    public void initSettingParams(){
-        if (Hawk.contains("WATA_PLATFORM_URL")) {
-            AppConfig.WATA_PLATFORM_URL = Hawk.get("WATA_PLATFORM_URL");
-        }
-        if (Hawk.contains("WORK_LOCATION_ID")) {
-            AppConfig.WORK_LOCATION_ID = Hawk.get("WORK_LOCATION_ID");
-        }
-        if (Hawk.contains("VEHICLE_ID")) {
-            AppConfig.VEHICLE_ID = Hawk.get("VEHICLE_ID");
-        }
-        if (Hawk.contains("RFID_MAC")) {
-            AppConfig.RFID_MAC = Hawk.get("RFID_MAC");
-        }
-        if (Hawk.contains("RFID_SCAN_CNT_THRESHOLD")) {
-            AppConfig.RFID_SCAN_CNT_THRESHOLD = Integer.parseInt(Hawk.get("RFID_SCAN_CNT_THRESHOLD").toString());
-        }
-        if (Hawk.contains("RFID_SCAN_INTERVAL")) {
-            AppConfig.RFID_SCAN_INTERVAL = Integer.parseInt(Hawk.get("RFID_SCAN_INTERVAL").toString());
-        }
-        if (Hawk.contains("FLOOR_HEIGHT")) {
-            AppConfig.FLOOR_HEIGHT = Integer.parseInt(Hawk.get("FLOOR_HEIGHT").toString());
-        }
-        if (Hawk.contains("PICK_THRESHOLD")) {
-            AppConfig.PICK_THRESHOLD = Integer.parseInt(Hawk.get("PICK_THRESHOLD").toString());
-        }
-        if (Hawk.contains("TOF_WIDTH")) {
-            AppConfig.TOF_WIDTH = Integer.parseInt(Hawk.get("TOF_WIDTH").toString());
-        }
-        if (Hawk.contains("TOF_HEIGHT")) {
-            AppConfig.TOF_HEIGHT = Integer.parseInt(Hawk.get("TOF_HEIGHT").toString());
-        }
-        if (Hawk.contains("TOF_RESAMPLING_WIDTH_MIN")) {
-            AppConfig.TOF_RESAMPLING_WIDTH_MIN = Integer.parseInt(Hawk.get("TOF_RESAMPLING_WIDTH_MIN").toString());
-        }
-
-        if (Hawk.contains("TOF_RESAMPLING_WIDTH_MAX")) {
-            AppConfig.TOF_RESAMPLING_WIDTH_MAX = Integer.parseInt(Hawk.get("TOF_RESAMPLING_WIDTH_MAX").toString());
-        }
-        if (Hawk.contains("TOF_RESAMPLING_HEIGHT_MIN")) {
-            AppConfig.TOF_RESAMPLING_HEIGHT_MIN = Integer.parseInt(Hawk.get("TOF_RESAMPLING_HEIGHT_MIN").toString());
-        }
-        if (Hawk.contains("TOF_RESAMPLING_HEIGHT_MAX")) {
-            AppConfig.TOF_RESAMPLING_HEIGHT_MAX = Integer.parseInt(Hawk.get("TOF_RESAMPLING_HEIGHT_MAX").toString());
-        }
-        if (Hawk.contains("MATRIX_X")) {
-            AppConfig.MATRIX_X = Integer.parseInt(Hawk.get("MATRIX_X").toString());
-        }
-        if (Hawk.contains("MATRIX_Y")) {
-            AppConfig.MATRIX_Y = Integer.parseInt(Hawk.get("MATRIX_Y").toString());
-        }
-
-        // 포크 샘플링
-        if (Hawk.contains("TOF_FORK_LENGTH")) {
-            AppConfig.TOF_FORK_LENGTH = Integer.parseInt(Hawk.get("TOF_FORK_LENGTH").toString());
-        }
-        if (Hawk.contains("TOF_FORK_THICKNESS")) {
-            AppConfig.TOF_FORK_THICKNESS = Integer.parseInt(Hawk.get("TOF_FORK_THICKNESS").toString());
-        }
-        if (Hawk.contains("TOF_FORK_GAP")) {
-            AppConfig.TOF_FORK_GAP = Integer.parseInt(Hawk.get("TOF_FORK_GAP").toString());
-        }
-
-        //부피 샘플링
-        if (Hawk.contains("TOF_RESAMPLING_VOLUME_WIDTH")) {
-            AppConfig.TOF_RESAMPLING_VOLUME_WIDTH = Integer.parseInt(Hawk.get("TOF_RESAMPLING_VOLUME_WIDTH").toString());
-        }
-        if (Hawk.contains("TOF_RESAMPLING_VOLUME_HEIGHT")) {
-            AppConfig.TOF_RESAMPLING_VOLUME_HEIGHT = Integer.parseInt(Hawk.get("TOF_RESAMPLING_VOLUME_HEIGHT").toString());
-        }
-
-    }
 
     public void settingParameter(View v){
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_setting, null);
@@ -1145,7 +1083,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         btn_ok.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-
                 Hawk.put("WATA_PLATFORM_URL",serverID.getText().toString());
                 Hawk.put("WORK_LOCATION_ID",centerID.getText().toString());
                 Hawk.put("VEHICLE_ID",vehicleID.getText().toString());
@@ -1246,240 +1183,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     }
 
 
-    public class WeakHandler extends Handler {
-        private final WeakReference<MainActivity> mWeakActivity;
-
-        public WeakHandler(MainActivity activity) {
-            mWeakActivity = new WeakReference<>(activity);
-        }
-
-        @Override
-        public void handleMessage(@NonNull Message msg) {
-            MainActivity activity = mWeakActivity.get();
-            if (activity == null) {
-                Log.d("handleMessage()", " activity is null!");
-                return;
-            }
-            Log.d("handleMessage()", "msg=" + msg.what);
-
-
-            switch (msg.what) {
-                case Msg.BT_SPP_ADD_DEVICE:
-                    BluetoothDevice btDevice = (BluetoothDevice) msg.obj;
-                    RemoteDevice device = RemoteDevice.makeBtSppDevice(btDevice);
-                    if (device.getAddress().equals(AppConfig.RFID_MAC)) {
-                        Log.d("bleDevice",device.getRfidStatus()+"");
-                        scanDevice = device;
-                    }
-                    break;
-
-                case Msg.BT_SPP_DEVICE_INFO_RECEIVED:
-                case Msg.WIFI_DEVICE_INFO_RECEIVED:
-                    RemoteDevice.Detail detail = (RemoteDevice.Detail)msg.obj;
-                    String deviceAddress = detail.mAddress;
-                    Log.d("BT_SPP_DEVICE_INFO_RECEIVED", "info:" + deviceAddress);
-
-                    RemoteDevice remoteDevice = scanDevice;
-                    if (remoteDevice != null) {
-                        if ((msg.what == Msg.SERIAL_DEVICE_INFO_RECEIVED) ||
-                                (msg.what == Msg.USB_DEVICE_INFO_RECEIVED) ||
-                                (msg.what == Msg.BT_SPP_DEVICE_INFO_RECEIVED)) {
-                            remoteDevice.setName((detail.mDeviceName != null) ? detail.mDeviceName : detail.mModel);
-                        }
-                        remoteDevice.setDetail(detail);
-
-                        if ((remoteDevice.getStatus() != RemoteDevice.STATUS_IDLE) && !remoteDevice.forceConnectionEnabled()) {
-                            Toast.makeText(MainActivity.this,
-                                    R.string.remote_scanner_alert_remote_device_is_busy_or_in_unkown_state,
-                                    Toast.LENGTH_LONG).show();
-                            return;
-                        } else {
-                            Log.e("Connect", AppConfig.RFID_MAC + " conn success");
-                            Toast.makeText(MainActivity.this,
-                                    "Connect Success",
-                                    Toast.LENGTH_LONG).show();
-                            mBtSppRemoteService.stopRemoteDeviceScan();
-                            initialize(remoteDevice, ConfigValues.DEFAULT_REMOTE_CONNECTION_TIMEOUT_IN_MS);
-                        }
-
-
-                    }
-                    break;
-
-
-            }
-        }
-    }
-
-
-    public void initialize(RemoteDevice device, int timeout) {
-        WorkObserver.waitFor(this,
-                getString(R.string.common_alert_connecting),
-                new WorkObserver.ObservableWork() {
-                    @Override
-                    public Object run() {
-                        initializeRfid(device, timeout);
-                        return null;
-                    }
-
-                    @Override
-                    public void onWorkDone(Object result) {
-                        mInitialized = true;
-                    }
-                });
-    }
-
-
-    public void initializeRfid(RemoteDevice device, int timeout) {
-        Log.d("initRfid", "th");
-
-        mReader = Reader.getReader(this, device, false, timeout);
-        if (mReader != null) {
-            mReader.setEventListener(this);
-            if (mReader.start()) {
-                Log.d("initRfid", "reader open success!");
-                toggleInventory();
-
-            } else {
-                Log.d("initRfid", "reader open failed!");
-                mReader.destroy();
-                mReader = null;
-                Toast.makeText(this,
-                        R.string.rfid_main_message_unable_to_connect_module,
-                        Toast.LENGTH_SHORT).show();
-            }
-        } else {
-            Log.d("initRfid", "reader instance is null!");
-
-            Toast.makeText(this,
-                    R.string.rfid_main_message_unable_to_connect_module,
-                    Toast.LENGTH_SHORT).show();
-        }
-    }
-
-
-    @Override
-    public void onReaderDeviceStateChanged(DeviceEvent state) {
-        Log.d("onReaderDeviceStateChanged", "DeviceEvent : " + state);
-
-        if (state == DeviceEvent.DISCONNECTED) {
-            mReader = null;
-        }
-    }
-
-
-    @Override
-    public void onReaderEvent(int event, int result, @Nullable String data) {
-        Log.d("onReaderEvent", "onReaderEvent(): event=" + event
-                + ", result=" + result
-                + ", data=" + data);
-
-        switch (event) {
-            case Reader.READER_CALLBACK_EVENT_INVENTORY:
-                if (result == RfidResult.SUCCESS) {
-                    if ((data != null) && mInventoryStarted) {
-                        processTagData(data);
-                    }
-                }
-                break;
-
-            case Reader.READER_CALLBACK_EVENT_START_INVENTORY:
-                if (!mInventoryStarted) {
-//                    startStopwatch();
-                    mInventoryStarted = true;
-                }
-                break;
-
-            case Reader.READER_CALLBACK_EVENT_STOP_INVENTORY:
-                if (mInventoryStarted && !mReader.isOperationRunning()) {
-                    mInventoryStarted = false;
-//                    pauseStopwatch();
-                }
-                break;
-        }
-    }
-
-
-    @Override
-    public void onReaderRemoteKeyEvent(int action, int keyCode) {
-        Log.d("onReaderRemoteKeyEvent","onReaderRemoteKeyEvent : action=" + action + " keyCode=" + keyCode);
-
-        if (keyCode == KeyEvent.KEYCODE_SHIFT_RIGHT) {
-            toggleInventory();
-        }
-    }
-
-    @Override
-    public void onReaderRemoteSettingChanged(int i, Object o) {
-
-    }
-
-
-
-    private void processTagData(String data) {
-        String epc = null;
-        String rssi = null;
-        String phase = null;
-        String fastID = null;
-        String channel = null;
-
-        String[] dataItems = data.split(";");
-        for (String dataItem : dataItems) {
-            if (dataItem.contains("rssi")) {
-                int point = dataItem.indexOf(':') + 1;
-                rssi = dataItem.substring(point);
-            } else if (dataItem.contains("phase")) {
-                int point = dataItem.indexOf(':') + 1;
-                phase = dataItem.substring(point);
-            } else if (dataItem.contains("fastID")) {
-                int point = dataItem.indexOf(':') + 1;
-                fastID = dataItem.substring(point);
-            } else if (dataItem.contains("channel")) {
-                int point = dataItem.indexOf(':') + 1;
-                channel = dataItem.substring(point);
-            } else {
-                epc = dataItem;
-            }
-        }
-
-
-        Log.d("epcResult", "rssi:" + rssi +"\n phase:"+phase +"\n channel:"+channel +"\n fastID:"+fastID+"\n epc:"+epc);
-    }
-
-    private void toggleInventory() {
-//        mInventoryButton.setEnabled(false);
-
-        int result;
-        if (mInventoryStarted) {
-            result = mReader.stopOperation();
-            if (result == RfidResult.SUCCESS) {
-                mInventoryStarted = false;
-
-            } else {
-                Toast.makeText(this,
-                        getString(R.string.rfid_alert_stop_inventory_failed)
-                                + " (" + result + ")",
-                        Toast.LENGTH_SHORT).show();
-            }
-        } else {
-            result = mReader.startInventory(
-                    mContinuousModeEnabled,
-                    false,
-                    mIgnorePC);
-            if (result == RfidResult.SUCCESS) {
-                mInventoryStarted = true;
-            } else if (result == RfidResult.LOW_BATTERY) {
-                Toast.makeText(this,
-                        R.string.rfid_alert_low_battery_warning,
-                        Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this,
-                        R.string.rfid_alert_start_inventory_failed,
-                        Toast.LENGTH_SHORT).show();
-            }
-        }
-    }
-
     /**
      * 뒤로가기 버튼 클릭 이벤트
      */
@@ -1488,10 +1191,18 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
             if (System.currentTimeMillis() > backKeyTime + 2000) {
                 backKeyTime = System.currentTimeMillis();
                 viewShortToast("한번 더 누르면 종료됩니다");
-
                 return;
             } else {
-                mCodeScanner.releaseResources();
+                mAlive = false;
+                mLocation = false;
+                if(mCodeScanner != null) {
+                    mCodeScanner.releaseResources();
+                }
+
+                mTerabeeSensorInstance.closeInstance();
+                mApulseRFIDInstance.closeInstance();
+
+                stopService(new Intent(MainActivity.this, BluetoothService.class));
                 finishAndRemoveTask();
             }
 
@@ -1508,6 +1219,9 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         if(mCodeScanner != null) {
             mCodeScanner.startPreview();
         }
+
+        mApulseRFIDInstance.stopScan();
+
     }
 
     @Override
@@ -1515,24 +1229,44 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         if(mCodeScanner != null) {
             mCodeScanner.releaseResources();
         }
+
+        mApulseRFIDInstance.stopScan();
+
+
         super.onPause();
     }
+
 
     @Override
     protected void onDestroy() {
         mAlive = false;
+        mLocation = false;
         if(mCodeScanner != null) {
             mCodeScanner.releaseResources();
         }
-        TerabeeSdk.getInstance().unregisterDataReceive(mDataDistanceCallback);
-        disconnectDevice();
-    // release Terabee SDK
-        TerabeeSdk.getInstance().dispose();
-        unbindBtSppRemoteService();
+        mTerabeeSensorInstance.closeInstance();
+        mApulseRFIDInstance.closeInstance();
 
         stopService(new Intent(MainActivity.this, BluetoothService.class));
         super.onDestroy();
     }
+
+
+    private boolean refreshDeviceCache(BluetoothGatt gatt){
+        try {
+            BluetoothGatt localBluetoothGatt = gatt;
+            Method localMethod = localBluetoothGatt.getClass().getMethod("refresh", new Class[0]);
+            if (localMethod != null) {
+                boolean bool = ((Boolean) localMethod.invoke(localBluetoothGatt, new Object[0])).booleanValue();
+                return bool;
+            }
+        }
+        catch (Exception localException) {
+            Log.e("refreshDeviceCache", "An exception occurred while refreshing device");
+        }
+        return false;
+    }
+
 
     //권한 확인
     private void onCheckPermission() {
@@ -1576,6 +1310,10 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
             //checkBluetooth();
         }
     }
+
+
+
+
 
 }
 

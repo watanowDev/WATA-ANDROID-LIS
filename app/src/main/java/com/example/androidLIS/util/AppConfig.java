@@ -13,6 +13,10 @@ public class AppConfig {
 
 //    public static String RFID_MAC = "34:86:5D:71:98:7A";
     public static String RFID_MAC = "00:05:C4:C1:01:2C";
+//    public static String RFID_MAC = "00:05:C4:C1:01:32";
+//    public static String RFID_MAC = "00:05:C4:C1:01:33";
+
+    public static final int RFID_SCAN_RESULT = 10047;
 
     public static int RFID_SCAN_INTERVAL = 50;
     public static int RFID_SCAN_CNT_THRESHOLD = 5;

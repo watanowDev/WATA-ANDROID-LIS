@@ -7,5 +7,8 @@
     <string name="rfid_alert_stop_inventory_failed">Failed to stop inventory!</string>
     <string name="rfid_alert_low_battery_warning">Low battery!</string>
     <string name="rfid_alert_start_inventory_failed">Failed to start inventory!</string>
+    <string name="remote_scanner_alert_turning_on_bluetooth">Turning on Bluetooth&#8230;</string>
+    <string name="remote_scanner_alert_bluetooth_not_supported">This device don\'t support Bluetooth!</string>
+    <string name="remote_scanner_alert_ble_not_supported">This device don\'t support BLE!</string>
 
 </resources>

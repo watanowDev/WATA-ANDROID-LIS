@@ -1,12 +1,12 @@
 package com.example.androidLIS.model;
 
-public class PositionData {
+public class RackData {
     public int floor;
-    public String address;
+    public String rack;
     public long time;
-    public PositionData(int floor, String address, long time){
+    public RackData(int floor, String address, long time){
         this.floor = floor;
-        this.address = address;
+        this.rack = address;
         this.time = time;
     }
 
@@ -18,12 +18,12 @@ public class PositionData {
         this.floor = floor;
     }
 
-    public String getAddress() {
-        return address;
+    public String getRack() {
+        return rack;
     }
 
-    public void setAddress(String address) {
-        this.address = address;
+    public void setRack(String rack) {
+        this.rack = rack;
     }
 
     public long getTime() {

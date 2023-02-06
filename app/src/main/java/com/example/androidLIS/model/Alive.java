@@ -5,8 +5,6 @@ public class Alive {
     public String vehicleId;
     public String errorCode;
 
-
-
     public Alive(String wid,String vid, String e) {
         workLocationId = wid;
         vehicleId = vid;

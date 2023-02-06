@@ -137,8 +137,10 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
         int totalDepth = 0;
         int avgDepth = 0;
         int depthNum = 0;
-        int sampleVolume = 0;
-        int totalVolume = 0;
+//        int sampleVolume = 0;
+//        int totalVolume = 0;
+        int nearestDistance = Integer.MAX_VALUE;
+        int nearestDistanceIndex = 0;
 
         for (int y = 0; y < HEIGHT; y++) {
             for (int x = 0; x < WIDTH; x++) {
@@ -171,15 +173,21 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
                 }
 
 
-
-                if (mSamplingDistance != 0) {
-                    totalVolume++;
-//                    if (depth > (mSamplingDistance - 150) && depth < (mSamplingDistance + 150)) {
-                    if(depth < mSamplingDistance){
-                        sampleVolume++;
-                        matrix[Math.floorDiv(x,mMatrixWidth)][Math.floorDiv(HEIGHT -y-1,mMatrixHeight)]++;
+                if(y == (int)(HEIGHT/2)){
+                    if(depth != 0 && depth < nearestDistance){
+                        nearestDistance = depth;
+                        nearestDistanceIndex = (WIDTH-x-1);
                     }
                 }
+
+//                if (mSamplingDistance != 0) {
+//                    totalVolume++;
+////                    if (depth > (mSamplingDistance - 150) && depth < (mSamplingDistance + 150)) {
+//                    if(depth < mSamplingDistance){
+//                        sampleVolume++;
+//                        matrix[Math.floorDiv(x,mMatrixWidth)][Math.floorDiv(HEIGHT -y-1,mMatrixHeight)]++;
+//                    }
+//                }
             }
         }
 
@@ -193,18 +201,23 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
 //        if(mSamplingDistance < (AppConfig.FORK_LENGTH-470) && mSamplingDistance > (AppConfig.FORK_LENGTH-530) && !currentStatus){
         if(mSamplingDistance < (AppConfig.FORK_LENGTH-250) && mSamplingDistance > (AppConfig.FORK_LENGTH-300) && !currentStatus){
 
-                double vol = ((sampleVolume*1.0f)/(totalVolume*1.0f))*100.0f;
-
-//            for(int i = 0 ; i < 10 ; i++){
-//                Log.e("matrixw10x10",Arrays.toString(matrix[i]));
-//            }
-//            Log.e("matrixw10x10","=====================================");
-
+//                double vol = ((sampleVolume*1.0f)/(totalVolume*1.0f))*100.0f;
+            double vol = ((nearestDistanceIndex*1.0f)/(WIDTH*1.0f))*100.0f;
+            if(vol > 90){
+                vol = vol-15.0f;
+            }else if(vol > 80){
+                vol = vol-10.0f;
+            }else if(vol> 70){
+                vol = vol-5.0f;
+            }
+                //하단 20프로가 안보이는 경우******
 //            sendCargoVolume((int)(20.0f+(80.0f*(vol/100.0f))), getMatrixData(matrix));
+            //전체 매트릭스 추출
 //            sendCargoVolume((int)vol-15, getMatrixData(matrix));
-            sendCargoVolume((int)vol-15, getMatrixDataFromVolume((int)vol-15));
-//            int[] matrix = {0,0,0,0,0,0,0,0,0,0};
-//            sendCargoVolume((int)(20.0f+(80.0f*(vol/100.0f))), matrix);
+            //볼륨을 통해 매트릭스 추출
+//            sendCargoVolume((int)vol-15, getMatrixDataFromVolume((int)vol-15));
+            sendCargoVolume((int)vol, getMatrixDataFromVolume((int)vol));
+
         }
 
 
@@ -231,9 +244,10 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
         }
 
         if(MainActivity.viewMode){
-            double p = ((sampleVolume*1.0f)/(totalVolume*1.0f))*100.0f;
-            int printp = (int) (20.0f+(80.0f*(p/100.0f)));
-            sendDepth(avgDepth + " / "+ printp + "%");
+//            double p = ((sampleVolume*1.0f)/(totalVolume*1.0f))*100.0f;
+//            int printp = (int) (20.0f+(80.0f*(p/100.0f)));
+            double p = ((nearestDistanceIndex*1.0f)/(WIDTH*1.0f))*100.0f;
+            sendDepth(avgDepth + " / "+ (int)p + "%");
         }else {
             sendDepth(String.valueOf(avgDepth));
         }
