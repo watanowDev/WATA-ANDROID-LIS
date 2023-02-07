@@ -12,9 +12,9 @@ public class AppConfig {
     public static String GET_OUT = "OUT";
 
 //    public static String RFID_MAC = "34:86:5D:71:98:7A";
-    public static String RFID_MAC = "00:05:C4:C1:01:2C";
+//    public static String RFID_MAC = "00:05:C4:C1:01:2C";
 //    public static String RFID_MAC = "00:05:C4:C1:01:32";
-//    public static String RFID_MAC = "00:05:C4:C1:01:33";
+    public static String RFID_MAC = "00:05:C4:C1:01:33";
 
     public static final int RFID_SCAN_RESULT = 10047;
 
@@ -42,8 +42,6 @@ public class AppConfig {
 
     public static int TOF_RESAMPLING_VOLUME_HEIGHT = 300;
     public static int TOF_RESAMPLING_VOLUME_WIDTH = 200;
-
-
 
     public static int MATRIX_X = 10;
     public static int MATRIX_Y = 1;

@@ -163,7 +163,6 @@ public class ApulseRFIDInstance implements ReaderEventListener {
                         initializeRfid(device, timeout);
                         return null;
                     }
-
                     @Override
                     public void onWorkDone(Object result) {
                         mInitialized = true;
@@ -181,8 +180,8 @@ public class ApulseRFIDInstance implements ReaderEventListener {
                 mReader.setToggle(0);
                 mReader.setInventoryAntennaPortReportState(1);
                 mReader.setRadioPower(27);
-                mReader.setTxOnTime(100);
-                mReader.setTxOnOverheadTime(300);
+                mReader.setTxOnTime(200);
+                mReader.setTxOffTime(200);
                 Log.d("initRfid", "reader open success!");
                 toggleInventory();
             } else {
