@@ -19,6 +19,7 @@ import android.graphics.RectF;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.text.TextUtils;
@@ -63,14 +64,19 @@ import com.example.androidLIS.tof.DepthFrameVisualizer;
 import com.example.androidLIS.model.RackData;
 import com.example.androidLIS.util.AppConfig;
 import com.example.androidLIS.util.AppUtil;
+import com.example.androidLIS.util.FileUtil;
 import com.google.zxing.Result;
 import com.orhanobut.hawk.Hawk;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 
 import io.reactivex.SingleObserver;
 import io.reactivex.android.schedulers.AndroidSchedulers;
@@ -90,14 +96,13 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
     private PermissionHelper permissionHelper;
     public static final int CAM_PERMISSIONS_REQUEST = 0;
-    private static final String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
+    private static final String DATE_FORMAT = "HH:mm:ss.SSS";
     private long backKeyTime = 0;
 
     //TOF 카메라
     private TextureView rawDataView;
     private Matrix defaultBitmapTransform;
     private Camera camera;
-
 
     //QR코드 스캐너
     private CodeScanner mCodeScanner;
@@ -110,6 +115,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
     public ApulseRFIDInstance mApulseRFIDInstance;
     private RfidHandler mRfidHandler= new RfidHandler(this);
+    public boolean isRFConnected = false;
 
     private BluetoothAdapter mBluetoothAdapter;
     private boolean mBleSupported = false;
@@ -122,12 +128,12 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     TextView mQrText;
     TextView mDisText;
     TextView mCargoAddress;
+    TextView mTimeText;
 
     public TextView mRFsetLog;
 
     //지게차 상태 뷰어
     LinearLayout mCargoExpect;
-
 
 
     /**
@@ -146,6 +152,13 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     public ArrayList<String> mBLEQueue;
     public String LocationEPC = null;
 
+    /**
+     * 최근 10초동안 정면 안테나 rssi 최대값
+     */
+
+
+    public String mOnRackEpc = "";
+    public long mOnRackTime = 0;
 
 
     /**
@@ -184,11 +197,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
      */
     public static boolean viewMode = false;
 
-    //로그 다이얼로그 텍스트
-    public String mLogText = "";
-
-
-
     //Alive 스레드
     public Thread mAliveThread;
     //백엔드 alive
@@ -207,6 +215,14 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     //백엔드 통신
     private RetrofitService mService;
 
+
+    File externalStorageDirectory = Environment.getExternalStorageDirectory();
+    String externalStorageDirectoryPath = externalStorageDirectory.getAbsolutePath();
+    String mLogDirectoryName = externalStorageDirectoryPath+"/WATALIS/CommonLog";
+    String mRFIDLogDirectoryName = externalStorageDirectoryPath+"/WATALIS/RfidLog";
+
+    File mLogFile = null;
+    File mRFIDLogFile = null;
 
 
     @Override
@@ -228,6 +244,9 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         mQrText = (TextView) findViewById(R.id.qrText);
         mDisText = (TextView) findViewById(R.id.distanceSensorText);
         mCargoAddress = (TextView) findViewById(R.id.cargoAddress);
+        mTimeText = (TextView)findViewById(R.id.timeText);
+
+
         mCurrentRack = new RackData(1,"field",0);
         mBLEQueue = new ArrayList<String>();
         mCargo = new CargoData("cargo",0);
@@ -235,7 +254,13 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         mCodeScannerView.setClickable(false);
 
         AppUtil.getInstance().initSettingParams();
-
+        /**
+         * 로그파일 생성
+         */
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy_MM_dd");
+        String currentDate = dateFormat.format(new Date());
+        mLogFile = FileUtil.createFileWithDate(mLogDirectoryName+"/"+currentDate);
+        mRFIDLogFile = FileUtil.createFileWithDate(mRFIDLogDirectoryName+"/"+currentDate);
         if(!AppUtil.getInstance().isNetworkConnected(getApplicationContext())){
             Log.d("network","not connected");
         }else{
@@ -252,12 +277,14 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         mService = RetrofitClient.getHeavyClient().create(RetrofitService.class);
         platformSendAliveMessage();
 
+
         mTerabeeHandler = new TerabeeHandler();
         mTerabeeSensorInstance = new TerabeeInstance(getApplicationContext(),mTerabeeHandler);
         mTerabeeSensorInstance.initTerabeeSensor();
 
 
         mApulseRFIDInstance = new ApulseRFIDInstance(this,mRfidHandler);
+        mApulseRFIDInstance.startScan();
 
         boolean supported = getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH);
         if (supported) {
@@ -429,70 +456,98 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                                 }
                                 mApulseRFIDInstance.initialize(remoteDevice, ConfigValues.DEFAULT_REMOTE_CONNECTION_TIMEOUT_IN_MS);
                             }
-
-
                         }
 
                     }
                     break;
                 case AppConfig.RFID_SCAN_RESULT:
-                    ArrayList<RfidScanData> data = mApulseRFIDInstance.getScanData();
-                    if(data.size() == 0){
+                    ArrayList<RfidScanData> frontData = mApulseRFIDInstance.getFrontScanData();
+                    ArrayList<RfidScanData> sideData = mApulseRFIDInstance.getSideScanData();
+                    String RFIDLogText = "";
+                    long now = System.currentTimeMillis();
+                    SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);
+                    String formatTime = dateFormat.format(now);
+
+                    int frontMaxRssiIndex = getMaxRssiIndex(frontData);
+                    int sideMaxRssiIndex = getMaxRssiIndex(sideData);
+
+                    if(now - mOnRackTime > AppConfig.ON_RACK_THRESHOLD){
+                        mOnRackTime = 0;
+                        mOnRackEpc = "";
+                    }
+
+                    if(frontData.size()>0) {
+                        if (frontData.get(frontMaxRssiIndex).rssi >= AppConfig.ON_RACK_RSSI) {
+                            mOnRackEpc = frontData.get(frontMaxRssiIndex).epc;
+                            mOnRackTime = now;
+                        }
+                    }
+                    setTimeText(mOnRackEpc);
+
+                    RFIDLogText = "[" + formatTime + "]\n"+"front size:"+frontData.size() + ", side size:"+sideData.size()+"\n";
+                    Log.e("scandata", "front size:"+frontData.size() + ", side size:"+sideData.size());
+                    if(frontMaxRssiIndex != -1){
+                        setCurrentRack(frontData.get(frontMaxRssiIndex).epc);
+                        setCargoAddress(frontData.get(frontMaxRssiIndex).epc +"//"+frontData.get(frontMaxRssiIndex).rssi);
+                        LocationEPC = frontData.get(frontMaxRssiIndex).epc;
+                    }else if(sideMaxRssiIndex != -1){
+                        setCargoAddress("field\n"+sideData.get(sideMaxRssiIndex).epc +"//"+sideData.get(sideMaxRssiIndex).rssi);
+                        LocationEPC = sideData.get(sideMaxRssiIndex).epc;
+                    }else{
                         setCargoAddress("field");
+                        LocationEPC = "field";
                     }
-                    boolean onRack = isOnTheRack(data);
-                    if(onRack){
-                        for(int i = 0 ; i < data.size() ; i++){
-                            if(Integer.parseInt(data.get(i).antenna) == 0){
-                                data.remove(i);
-                                i--;
+
+
+                    if(frontData.size()!=0) {
+                        RFIDLogText = RFIDLogText + "FRONT_DATA:\n";
+                        for(int i =0 ; i < frontData.size() ; i++){
+                            if(i == frontMaxRssiIndex){
+                                RFIDLogText = RFIDLogText + "**";
                             }
+                            RFIDLogText = RFIDLogText +frontData.get(i).epc + "(" + frontData.get(i).rssi + ")\n";
                         }
+                        Log.e("scandata", "front:" + frontData.get(frontMaxRssiIndex).epc + "[" + frontData.get(frontMaxRssiIndex).rssi + "]");
                     }
 
-                    Log.e("scandata", data.size() + "");
-                    if (data.size() > 0) {
-                        double max_rssi = Integer.MIN_VALUE;
-                        int max_rssi_index = 0;
-                        for (int i = 0; i < data.size(); i++) {
-                            if (Double.parseDouble(data.get(i).rssi) > max_rssi) {
-                                max_rssi = Double.parseDouble(data.get(i).rssi);
-                                max_rssi_index = i;
+                    if(sideData.size() !=0) {
+                        RFIDLogText = RFIDLogText + "SIDE_DATA:\n";
+                        for(int i =0 ; i < sideData.size() ; i++){
+                            if(i == sideMaxRssiIndex){
+                                RFIDLogText = RFIDLogText + "**";
                             }
+                            RFIDLogText = RFIDLogText +sideData.get(i).epc + "(" + sideData.get(i).rssi + ")\n";
                         }
-                        if(onRack) {
-                            setCurrentRack(data.get(max_rssi_index).epc);
-                            setCargoAddress(data.get(max_rssi_index).epc);
-                        }else{
-                            setCargoAddress("field");
-                        }
-                        LocationEPC = data.get(max_rssi_index).epc;
-
-                        if(mLocationThread == null){
-                            platformSendLocationMessage();
-                        }
-
+                        Log.e("scandata", "side:" + sideData.get(sideMaxRssiIndex).epc + "[" + sideData.get(sideMaxRssiIndex).rssi + "]");
                     }
+                    FileUtil.writeDataToFile(mRFIDLogFile, RFIDLogText+"\n\n");
+
+                    if(mLocationThread == null){
+                        platformSendLocationMessage();
+                    }
+
                     break;
 
             }
         }
     }
 
-    public boolean isOnTheRack(ArrayList<RfidScanData> data){
-        for(int i = 0; i < data.size() ; i++){
-            if(Integer.parseInt(data.get(i).antenna) == 1){
-                return true;
+    public int getMaxRssiIndex(ArrayList<RfidScanData> data){
+        if (data.size() > 0) {
+            double max_rssi = Integer.MIN_VALUE;
+            int max_rssi_index = 0;
+            for (int i = 0; i < data.size(); i++) {
+                if (data.get(i).rssi > max_rssi) {
+                    max_rssi = data.get(i).rssi;
+                    max_rssi_index = i;
+                }
             }
+            return max_rssi_index;
+        }else{
+            return -1;
         }
-        return false;
     }
 
-    private void checkCamPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAM_PERMISSIONS_REQUEST);
-        }
-    }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -525,10 +580,11 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
      */
     @Override
     public void onCargoExpect(boolean status) {
-        String text = "";
+        String logText = "";
         long now = System.currentTimeMillis();
         SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);
         String formatTime = dateFormat.format(now);
+//        setTimeText(formatTime);
         switch (getCargoStatus()){
             case 0://짐이 없는 상황
                 if(status){//짐이 없었는데 생김
@@ -546,8 +602,11 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                 }
                 break;
 
-            case 1://짐이 있던 상황
-                if ((now - mCurrentLoadIn) > 2000 && (now - mCurrentRack.time) < 2000 && mCurrentLoadIn != 0) {
+            case 1://짐이 있는 상황
+                if ((now - mCurrentLoadIn) > 3000                                                   //짐이 실리고 3초 후
+                        && (now - mCurrentRack.time) < 3000                                         //스캔된 RFID가 3초내에 있을 때
+                        && mCurrentRack.rack.equals(mOnRackEpc)                                     //최근 10초동안 선반에 있다고 판단되는 RFID가 최근 스캔된 가장쎈 RFID와 일치
+                        && mCurrentLoadIn != 0 ) {                                                  //짐을 이미 실었다고 판단하는 경우 : 이 로직을 타지 않음
                     this.mCurrentLoadIn = 0;
                     //선반에 있는 짐을 실은 상황
                     /**
@@ -556,9 +615,9 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                      * 현재 높이 : mCurrentRack.floor
                      * 현재 짐의 부피 : mCurrentCargoVolume
                      */
-                    text = "( IN )\nadr:" + mCurrentRack.rack + "\nName :" + mCurrentLoadCargo + "\nHeight:" + mCurrentRack.floor + "\nvolume:" + mLoadInCargoVolume;
-                    viewShortToast(text);
-                    mLogText = mLogText + "\n[" + formatTime + "]\n" + text + "\n";
+                    logText = "[" + formatTime + "]" + "EVENT:"+AppConfig.GET_IN + ", RACK_ID:" + mCurrentRack.rack + ", CARGO_ID:" + mCurrentLoadCargo + ", Height:" + mCurrentRack.floor + ", Volume:" + mLoadInCargoVolume + "\n";
+                    viewShortToast(logText);
+                    FileUtil.writeDataToFile(mLogFile,logText);
                     int[] defaultMatrix ={0,0,0,0,0,0,0,0,0,0};
 
                     //백엔드 연동 추가
@@ -573,13 +632,14 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                             , String.valueOf(AppConfig.MATRIX_Y)
                             , defaultMatrix)));
                     setCargoAddress(mCurrentRack.rack);
-                } else if (mCurrentLoadIn != 0 && (now - mCurrentLoadIn) > 2000) {//선반이 아닌 곳의 짐을 실음
+                } else if (mCurrentLoadIn != 0 && (now - mCurrentLoadIn) > 3000) {//선반이 아닌 곳의 짐을 실음
                     int[] defaultMatrix ={0,0,0,0,0,0,0,0,0,0};
                     this.mCurrentLoadIn = 0;
                     setCargoAddress("field");
-                    text = "( IN )\nadr:" + "field" + "\nName :" + mCurrentLoadCargo + "\nHeight:" + "1" + "\nvolume:" + mLoadInCargoVolume;
-                    viewShortToast(text);
-                    mLogText = mLogText + "\n[" + formatTime + "]\n" + text + "\n";
+                    logText ="[" + formatTime + "]" +  "EVENT:"+AppConfig.GET_IN + ", RACK_ID:" + "Field" + ", CARGO_ID:" + mCurrentLoadCargo + ", Height:" + mCurrentRack.floor + ", Volume:" + mLoadInCargoVolume+ "\n";
+                    viewShortToast(logText);
+                    FileUtil.writeDataToFile(mLogFile,logText);
+
                     //백엔드 연동 추가
                     platformActionInfoMessage(new ActionInfoReqData(new ActionInfo(AppConfig.WORK_LOCATION_ID
                             , AppConfig.GET_IN
@@ -607,11 +667,12 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                 break;
 
             case 2://최근에 짐을 내린 상황
-                if ((now - mCurrentRack.time) < 5000) {
+                if ((now - mCurrentRack.time) < 5000
+                        && mCurrentRack.rack.equals(mOnRackEpc)) {
                     //내린 선반 입력''''
-                    text = "( OUT )\nadr:" + mCurrentRack.rack + "\nName :" + mCurrentLoadCargo + "\nHeight:" + mCurrentRack.floor + "\nvolume:" + mLoadInCargoVolume;
-                    viewShortToast(text);
-                    mLogText = mLogText + "\n[" + formatTime + "]\n" + text + "\n";
+                    logText = "[" + formatTime + "]" + "EVENT:"+AppConfig.GET_OUT + ", RACK_ID:" + mCurrentRack.rack + ", CARGO_ID:" + mCurrentLoadCargo + ", Height:" + mCurrentRack.floor + ", Volume:" + mLoadInCargoVolume+ "\n";
+                    FileUtil.writeDataToFile(mLogFile,logText);
+                    viewShortToast(logText);
                     //백엔드 연동 추가
                     platformActionInfoMessage(new ActionInfoReqData(new ActionInfo(AppConfig.WORK_LOCATION_ID
                             , AppConfig.GET_OUT
@@ -631,10 +692,9 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                     //선반이 아닌곳에 내림
 //                    mCurrentPosition = new PositionData(1,"field",now);
                     setCargoAddress("field");
-                    text = "( OUT )\nadr:" + "field"+ "\nName :" + mCurrentLoadCargo + "\nHeight:" + "1" + "\nvolume:" + mLoadInCargoVolume;
-                    viewShortToast(text);
-                    mLogText = mLogText + "\n[" + formatTime + "]\n" + text + "\n";
-
+                    logText = "[" + formatTime + "]" + "EVENT:"+AppConfig.GET_OUT + ", RACK_ID:" + "Field"+ ", CARGO_ID:" + mCurrentLoadCargo + ", Height:" + mCurrentRack.floor + ", Volume:" + mLoadInCargoVolume+ "\n";
+                    viewShortToast(logText);
+                    FileUtil.writeDataToFile(mLogFile,logText);
 
                     //백엔드 연동 추가
                     platformActionInfoMessage(new ActionInfoReqData(new ActionInfo(AppConfig.WORK_LOCATION_ID
@@ -819,6 +879,15 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     }
 
 
+    //시간 텍스트뷰
+    public void setTimeText(String s){
+        runOnUiThread(new Runnable() {
+            public void run() {
+                mTimeText.setText(s);
+            }
+        });
+    }
+
     /**
      * 뷰모드
      * TOF <-> QR
@@ -840,41 +909,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
     }
 
-    /**
-     * 로그 데이터 뷰어
-     * @param v
-     */
-    public void callLogViewer(View v) {
-        View dialogView = getLayoutInflater().inflate(R.layout.dialog_log_message, null);
-        final TextView logtext = dialogView.findViewById(R.id.logMessageText);
-        final TextView btn = dialogView.findViewById(R.id.btn_ok);
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setView(dialogView);
-        logtext.setText(mLogText);
 
-
-        final AlertDialog alertDialog = builder.create();
-        alertDialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        alertDialog.show();
-        btn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                alertDialog.dismiss();
-            }
-        });
-
-    }
-
-
-    /**
-     * RFID 스캔 데이터를 기반으로 현재 선반 위치 추측
-     * @param list
-     * @return
-     */
-
-    public String guessLocation(ArrayList<String> list){
-       return null;
-    }
 
     /**
      * 백엔드 연동 테스트
@@ -1310,8 +1345,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
             //checkBluetooth();
         }
     }
-
-
 
 
 

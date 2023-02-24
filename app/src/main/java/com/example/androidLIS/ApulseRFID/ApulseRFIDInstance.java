@@ -60,7 +60,9 @@ public class ApulseRFIDInstance implements ReaderEventListener {
     private Thread thread;
 
 
-    public ArrayList<RfidScanData> scanData = new ArrayList<RfidScanData>();
+    public ArrayList<RfidScanData> frontScanData = new ArrayList<RfidScanData>();
+    public ArrayList<RfidScanData> sideScanData = new ArrayList<RfidScanData>();
+
     public ApulseRFIDInstance(Activity activity,MainActivity.RfidHandler handler){
         mActivity = activity;
 
@@ -180,8 +182,8 @@ public class ApulseRFIDInstance implements ReaderEventListener {
                 mReader.setToggle(0);
                 mReader.setInventoryAntennaPortReportState(1);
                 mReader.setRadioPower(27);
-                mReader.setTxOnTime(200);
-                mReader.setTxOffTime(200);
+                mReader.setTxOnTime(100);
+                mReader.setTxOffTime(100);
                 Log.d("initRfid", "reader open success!");
                 toggleInventory();
             } else {
@@ -281,13 +283,13 @@ public class ApulseRFIDInstance implements ReaderEventListener {
                 epc = dataItem;
             }
         }
-        if(antenna.equals("1")){
-
-        }else if(antenna.equals("2")){
+        if(antenna.equals("0")){
+            sideScanData.add(new RfidScanData(epc,Double.parseDouble(rssi),antenna,System.currentTimeMillis()));
+        }else if(antenna.equals("1")){
+            frontScanData.add(new RfidScanData(epc,Double.parseDouble(rssi),antenna,System.currentTimeMillis()));
 
         }
 
-        scanData.add(new RfidScanData(epc,rssi,antenna,System.currentTimeMillis()));
 
 
     }
@@ -302,12 +304,21 @@ public class ApulseRFIDInstance implements ReaderEventListener {
             @Override
             public void run() {
                 while (mInventoryStarted) {
-                    for (int i = 0; i < scanData.size(); i++) {
-                        if (scanData.size() != 0 && System.currentTimeMillis() - scanData.get(i).time > 1000) {
-                            scanData.remove(i);
+                    for (int i = 0; i < frontScanData.size(); i++) {
+                        if (frontScanData.size() != 0 && System.currentTimeMillis() - frontScanData.get(i).time > 1000) {
+                            frontScanData.remove(i);
                             i--;
                         }
                     }
+
+                    for (int i = 0; i < sideScanData.size(); i++) {
+                        if (sideScanData.size() != 0 && System.currentTimeMillis() - sideScanData.get(i).time > 1000) {
+                            sideScanData.remove(i);
+                            i--;
+                        }
+                    }
+
+
                     Message message = Message.obtain(mHandler, AppConfig.RFID_SCAN_RESULT);
                     mHandler.sendMessage(message);
                     try {
@@ -321,8 +332,13 @@ public class ApulseRFIDInstance implements ReaderEventListener {
         thread.start();
     }
 
-    public ArrayList<RfidScanData> getScanData(){
-        ArrayList<RfidScanData> result = new ArrayList<RfidScanData>(scanData);
+    public ArrayList<RfidScanData> getFrontScanData(){
+        ArrayList<RfidScanData> result = new ArrayList<RfidScanData>(frontScanData);
+        return result;
+    }
+
+    public ArrayList<RfidScanData> getSideScanData(){
+        ArrayList<RfidScanData> result = new ArrayList<RfidScanData>(sideScanData);
         return result;
     }
 

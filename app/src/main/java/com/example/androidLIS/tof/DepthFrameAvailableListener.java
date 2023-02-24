@@ -199,13 +199,11 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
         mSamplingDistance =  (int)(avgDepth/10)*10;
 
 //        if(mSamplingDistance < (AppConfig.FORK_LENGTH-470) && mSamplingDistance > (AppConfig.FORK_LENGTH-530) && !currentStatus){
-        if(mSamplingDistance < (AppConfig.FORK_LENGTH-250) && mSamplingDistance > (AppConfig.FORK_LENGTH-300) && !currentStatus){
+        if(mSamplingDistance < (AppConfig.FORK_LENGTH+50) && mSamplingDistance > (AppConfig.FORK_LENGTH-50) && !currentStatus){
 
 //                double vol = ((sampleVolume*1.0f)/(totalVolume*1.0f))*100.0f;
             double vol = ((nearestDistanceIndex*1.0f)/(WIDTH*1.0f))*100.0f;
-            if(vol > 90){
-                vol = vol-15.0f;
-            }else if(vol > 80){
+            if(vol > 80){
                 vol = vol-10.0f;
             }else if(vol> 70){
                 vol = vol-5.0f;
