@@ -22,8 +22,8 @@ public class AppConfig {
 
 
     public static int TOF_WIDTH = 320;
-    public static int TOF_RESAMPLING_WIDTH_MIN = 130; //40
-    public static int TOF_RESAMPLING_WIDTH_MAX = 170;
+    public static int TOF_RESAMPLING_WIDTH_MIN = 110; //40
+    public static int TOF_RESAMPLING_WIDTH_MAX = 150;
 
 
     public static int TOF_HEIGHT = 240;

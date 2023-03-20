@@ -178,9 +178,11 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
                     totalVolume++;
                     if (depth > (mSamplingDistance - 50) && depth < (mSamplingDistance + 50)) {
 //                    if(depth < mSamplingDistance){
-                        sampleVolume++;
-//                        Log.e("xy", Math.floorDiv(x-(WIDTH-(AppConfig.TOF_RESAMPLING_WIDTH_MAX+50)),mMatrixWidth) +"///"+ Math.floorDiv(y -(HEIGHT -(AppConfig.TOF_RESAMPLING_HEIGHT_MAX+50)) ,mMatrixHeight));
-                        matrix[Math.floorDiv(x-(WIDTH-(AppConfig.TOF_RESAMPLING_WIDTH_MAX+50)),mMatrixWidth)][9-Math.floorDiv((y-(HEIGHT-(AppConfig.TOF_RESAMPLING_HEIGHT_MAX+50))) ,mMatrixHeight)]++;
+                        if(Math.floorDiv(x-(WIDTH-(AppConfig.TOF_RESAMPLING_WIDTH_MAX+50)),mMatrixWidth) != 10 && Math.floorDiv(x-(WIDTH-(AppConfig.TOF_RESAMPLING_WIDTH_MAX+50)),mMatrixWidth)!=-1
+                        &&9-Math.floorDiv((y-(HEIGHT-(AppConfig.TOF_RESAMPLING_HEIGHT_MAX+50))) ,mMatrixHeight) != 10 && 9-Math.floorDiv((y-(HEIGHT-(AppConfig.TOF_RESAMPLING_HEIGHT_MAX+50))) ,mMatrixHeight)!= -1) {
+                            sampleVolume++;
+                            matrix[Math.floorDiv(x - (WIDTH - (AppConfig.TOF_RESAMPLING_WIDTH_MAX + 50)), mMatrixWidth)][9 - Math.floorDiv((y - (HEIGHT - (AppConfig.TOF_RESAMPLING_HEIGHT_MAX + 50))), mMatrixHeight)]++;
+                        }
                     }
                 }
             }

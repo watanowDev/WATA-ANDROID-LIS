@@ -56,7 +56,6 @@ import com.example.androidLIS.util.AppConfig;
 import com.example.androidLIS.util.AppUtil;
 import com.google.zxing.Result;
 import com.orhanobut.hawk.Hawk;
-import com.terabee.sdk.TerabeeSdk;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -77,7 +76,6 @@ import timber.log.Timber;
  */
 public class MainActivity extends AppCompatActivity implements DepthFrameVisualizer {
 
-    private TerabeeSdk.DeviceType mCurrentType = TerabeeSdk.DeviceType.AUTO_DETECT;
     private PermissionHelper permissionHelper;
 
 
@@ -277,10 +275,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 //        }catch (CameraAccessException e){
 //            e.printStackTrace();
 //        }
-        TerabeeSdk.getInstance().init(this);
-        TerabeeSdk.getInstance().registerDataReceive(mDataDistanceCallback);
-
-        connectToDevice();
         /**
          * QR스캔 시작
          */
@@ -312,85 +306,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
             });        }
 
     }
-
-    /**
-     * 거리센서 콜백함수
-     */
-    private final TerabeeSdk.DataDistanceCallback mDataDistanceCallback = new
-            TerabeeSdk.DataDistanceCallback() {
-                @Override
-                public void onDistanceReceived(int distance, int dataBandwidth, int
-                        dataSpeed) {
-                    setDistext(distance+"");
-                    setCurrentFloor(distance);
-
-                    if(distance <= AppConfig.FLOOR_HEIGHT){ //1층
-                        setCargoFloor("1층");
-                    }else if(distance > AppConfig.FLOOR_HEIGHT && distance <= (AppConfig.FLOOR_HEIGHT*2)){ //2층
-                        setCargoFloor("2층");
-                    }else if(distance > (AppConfig.FLOOR_HEIGHT*2) && distance <= (AppConfig.FLOOR_HEIGHT*3)){ //3층
-                        setCargoFloor("3층");
-                    }else if(distance > (AppConfig.FLOOR_HEIGHT*3) && distance <= (AppConfig.FLOOR_HEIGHT*4)) { //4층
-                        setCargoFloor("4층");
-                    }else{ //그 외
-                        setCargoFloor("1층");
-                    }
-
-
-                    // received distance from the sensor
-                }
-
-                @Override
-                public void onReceivedData(byte[] bytes, int i, int i1) {
-                    // received raw data from the sensor
-                    Log.d("TerabeeLog",AppUtil.getInstance().byteArrayToHex(bytes));
-                }
-            };
-
-
-    private void connectToDevice() {
-        Thread connectThread = new Thread(() -> {
-            try {
-                TerabeeSdk.getInstance().connect(new TerabeeSdk.IUsbConnect() {
-                    @Override
-                    public void connected(boolean success, TerabeeSdk.DeviceType
-                            deviceType) {
-                        isconn(success);
-                        Log.d("Terabee", success + "");
-                    }
-
-                    @Override
-                    public void disconnected() {
-
-                    }
-
-                    @Override
-                    public void permission(boolean granted) {
-
-                    }
-//                }, TerabeeSdk.DeviceType.EVO_60M);
-                }, mCurrentType);
-            } catch (Exception e) {
-                Log.e("Terabee", e.getMessage());
-            }
-        });
-
-        connectThread.start();
-    }
-
-
-    private void disconnectDevice() {
-        try {
-            TerabeeSdk.getInstance().disconnect();
-        } catch (Exception e) {
-            Log.e("Terabee", e.getMessage());
-        }
-    }
-
-    private void clearDataReceivers() {
-        TerabeeSdk.getInstance().unregisterDataReceive(mDataDistanceCallback);
-    }
-
 
 
     private void checkCamPermissions() {
@@ -1339,19 +1254,19 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         if (Hawk.contains("TOF_HEIGHT")) {
             AppConfig.TOF_HEIGHT = Integer.parseInt(Hawk.get("TOF_HEIGHT").toString());
         }
-        if (Hawk.contains("TOF_RESAMPLING_WIDTH_MIN")) {
-            AppConfig.TOF_RESAMPLING_WIDTH_MIN = Integer.parseInt(Hawk.get("TOF_RESAMPLING_WIDTH_MIN").toString());
-        }
-
-        if (Hawk.contains("TOF_RESAMPLING_WIDTH_MAX")) {
-            AppConfig.TOF_RESAMPLING_WIDTH_MAX = Integer.parseInt(Hawk.get("TOF_RESAMPLING_WIDTH_MAX").toString());
-        }
-        if (Hawk.contains("TOF_RESAMPLING_HEIGHT_MIN")) {
-            AppConfig.TOF_RESAMPLING_HEIGHT_MIN = Integer.parseInt(Hawk.get("TOF_RESAMPLING_HEIGHT_MIN").toString());
-        }
-        if (Hawk.contains("TOF_RESAMPLING_HEIGHT_MAX")) {
-            AppConfig.TOF_RESAMPLING_HEIGHT_MAX = Integer.parseInt(Hawk.get("TOF_RESAMPLING_HEIGHT_MAX").toString());
-        }
+//        if (Hawk.contains("TOF_RESAMPLING_WIDTH_MIN")) {
+//            AppConfig.TOF_RESAMPLING_WIDTH_MIN = Integer.parseInt(Hawk.get("TOF_RESAMPLING_WIDTH_MIN").toString());
+//        }
+//
+//        if (Hawk.contains("TOF_RESAMPLING_WIDTH_MAX")) {
+//            AppConfig.TOF_RESAMPLING_WIDTH_MAX = Integer.parseInt(Hawk.get("TOF_RESAMPLING_WIDTH_MAX").toString());
+//        }
+//        if (Hawk.contains("TOF_RESAMPLING_HEIGHT_MIN")) {
+//            AppConfig.TOF_RESAMPLING_HEIGHT_MIN = Integer.parseInt(Hawk.get("TOF_RESAMPLING_HEIGHT_MIN").toString());
+//        }
+//        if (Hawk.contains("TOF_RESAMPLING_HEIGHT_MAX")) {
+//            AppConfig.TOF_RESAMPLING_HEIGHT_MAX = Integer.parseInt(Hawk.get("TOF_RESAMPLING_HEIGHT_MAX").toString());
+//        }
         if (Hawk.contains("MATRIX_X")) {
             AppConfig.MATRIX_X = Integer.parseInt(Hawk.get("MATRIX_X").toString());
         }
@@ -1578,10 +1493,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         if(mCodeScanner != null) {
             mCodeScanner.releaseResources();
         }
-        TerabeeSdk.getInstance().unregisterDataReceive(mDataDistanceCallback);
-        disconnectDevice();
-    // release Terabee SDK
-        TerabeeSdk.getInstance().dispose();
 
         stopService(new Intent(MainActivity.this, BluetoothService.class));
         unregisterReceiver(this.mNotificationReceiver);
