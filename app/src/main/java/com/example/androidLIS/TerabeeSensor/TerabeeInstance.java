@@ -41,7 +41,6 @@ public class TerabeeInstance {
                 @Override
                 public void onDistanceReceived(int distance, int dataBandwidth, int
                         dataSpeed) {
-
                     Message message = mHandler.obtainMessage();
                     Bundle bundle = new Bundle();
                     bundle.putInt("type",1);
@@ -54,7 +53,7 @@ public class TerabeeInstance {
                 @Override
                 public void onReceivedData(byte[] bytes, int i, int i1) {
                     // received raw data from the sensor
-                    Log.d("TerabeeLog", AppUtil.getInstance().byteArrayToHex(bytes));
+//                    Log.d("TerabeeLog", AppUtil.getInstance().byteArrayToHex(bytes));
                 }
             };
 
@@ -66,7 +65,6 @@ public class TerabeeInstance {
                     @Override
                     public void connected(boolean success, TerabeeSdk.DeviceType
                             deviceType) {
-
                         Message message = mHandler.obtainMessage();
                         Bundle bundle = new Bundle();
                         bundle.putInt("type",2);

@@ -10,5 +10,5 @@ public interface DepthFrameVisualizer {
     void onCargoExpect(boolean cargo);
     void onSampleDepth(String depth);
     void onCargoVolume(int volume, int[] matrix);
-
+    void onTOFStatus(boolean status);
 }

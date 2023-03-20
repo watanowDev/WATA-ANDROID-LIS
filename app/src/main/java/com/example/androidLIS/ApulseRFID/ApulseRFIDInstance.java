@@ -1,29 +1,21 @@
 package com.example.androidLIS.ApulseRFID;
 
 import android.app.Activity;
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothGatt;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.content.pm.PackageManager;
-import android.os.Bundle;
-import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.util.Log;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.apulsetech.lib.event.DeviceEvent;
 import com.apulsetech.lib.event.ReaderEventListener;
 import com.apulsetech.lib.remote.service.BtSppRemoteService;
-import com.apulsetech.lib.remote.type.ConfigValues;
-import com.apulsetech.lib.remote.type.Msg;
 import com.apulsetech.lib.remote.type.RemoteDevice;
 import com.apulsetech.lib.remote.type.Setting;
 import com.apulsetech.lib.rfid.Reader;
@@ -31,21 +23,21 @@ import com.apulsetech.lib.rfid.type.RfidResult;
 import com.example.androidLIS.MainActivity;
 import com.example.androidLIS.R;
 import com.example.androidLIS.model.RfidScanData;
-import com.example.androidLIS.tof.DepthFrameVisualizer;
 import com.example.androidLIS.util.AppConfig;
 import com.example.androidLIS.util.WorkObserver;
 
-import java.lang.ref.WeakReference;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 
 public class ApulseRFIDInstance implements ReaderEventListener {
     //Apulse RFID Scanner
     private boolean mInitialized = false;
     private Reader mReader;
-    private boolean mInventoryStarted = false;
+    public boolean mInventoryStarted = false;
+    public boolean mConnectedReader = false;
     private boolean mContinuousModeEnabled = true;
     private boolean mIgnorePC = false;
-    private BtSppRemoteService mBtSppRemoteService;
+    public BtSppRemoteService mBtSppRemoteService;
     private boolean mBtSppRemoteServiceBound = false;
 
     private static final int DEFAULT_SCAN_PERIOD = 120000;
@@ -69,7 +61,6 @@ public class ApulseRFIDInstance implements ReaderEventListener {
         mSetting = new Setting(mActivity);
         mPreviouslyConnectedDevices = mSetting.getPreviouslyConnectedDevices();
         mHandler = handler;
-
     }
 
 
@@ -108,7 +99,7 @@ public class ApulseRFIDInstance implements ReaderEventListener {
 
     }
 
-    public void stopScan(){
+    public void toogleScan(){
         if (mReader != null) {
             toggleInventory();
         }
@@ -119,6 +110,8 @@ public class ApulseRFIDInstance implements ReaderEventListener {
         public void onServiceConnected(ComponentName componentName, IBinder binder) {
             Log.d("mBtSppRemoteServiceConnection", "onServiceConnected() BT SPP service.");
             mBtSppRemoteService = ((BtSppRemoteService.LocalBinder)binder).getService(mHandler);
+            Message message = Message.obtain(mHandler, AppConfig.RFID_CONN_READY);
+            mHandler.sendMessage(message);
         }
 
         @Override
@@ -135,7 +128,7 @@ public class ApulseRFIDInstance implements ReaderEventListener {
         for(int i = 0 ; i < mPreviouslyConnectedDevices.size() ; i++){
             RemoteDevice preDevice = RemoteDevice.fromGson(mPreviouslyConnectedDevices.get(i));
             if(preDevice.getAddress().equals(AppConfig.RFID_MAC)){
-                initialize(preDevice,40000);
+                initialize(preDevice,AppConfig.RFID_SCAN_TIMEOUT);
                 return;
             }
         }
@@ -147,7 +140,9 @@ public class ApulseRFIDInstance implements ReaderEventListener {
                 mBtSppRemoteService.startRemoteDeviceScan(mScanPeriod);
             }
         } else {
-            Log.d("connBLE","BT SPP Remote service is not binded!");
+            Log.d("mBtSppConnect","BT SPP Remote service is not binded!");
+            Message message = Message.obtain(mHandler, AppConfig.RFID_CONN_FAIL);
+            mHandler.sendMessage(message);
         }
 
     }
@@ -182,24 +177,22 @@ public class ApulseRFIDInstance implements ReaderEventListener {
                 mReader.setToggle(0);
                 mReader.setInventoryAntennaPortReportState(1);
                 mReader.setRadioPower(27);
-                mReader.setTxOnTime(100);
-                mReader.setTxOffTime(100);
+                mReader.setTxOnTime(AppConfig.RFID_SCAN_INTERVAL);
+                mReader.setTxOffTime(AppConfig.RFID_SCAN_INTERVAL);
                 Log.d("initRfid", "reader open success!");
                 toggleInventory();
             } else {
                 Log.d("initRfid", "reader open failed!");
+                Message message = Message.obtain(mHandler, AppConfig.RFID_CONN_FAIL);
+                mHandler.sendMessage(message);
                 mReader.destroy();
                 mReader = null;
-                Toast.makeText(mActivity,
-                        R.string.rfid_main_message_unable_to_connect_module,
-                        Toast.LENGTH_SHORT).show();
             }
         } else {
             Log.d("initRfid", "reader instance is null!");
+            Message message = Message.obtain(mHandler, AppConfig.RFID_CONN_FAIL);
+            mHandler.sendMessage(message);
 
-            Toast.makeText(mActivity,
-                    R.string.rfid_main_message_unable_to_connect_module,
-                    Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -207,9 +200,24 @@ public class ApulseRFIDInstance implements ReaderEventListener {
     @Override
     public void onReaderDeviceStateChanged(DeviceEvent state) {
         Log.d("onReaderDeviceStateChanged", "DeviceEvent : " + state);
-
         if (state == DeviceEvent.DISCONNECTED) {
+            Message message = Message.obtain(mHandler, AppConfig.RFID_CONN_FAIL);
+            mHandler.sendMessage(message);
+            mReader.stopOperation();
+            mReader.stop();
+            mReader.destroy();
             mReader = null;
+            thread.interrupt();
+            thread = null;
+            mConnectedReader = false;
+            mInventoryStarted = false;
+        }
+
+        if(state == DeviceEvent.CONNECTED){
+            Log.d("onReaderDeviceStateChanged", "DeviceEvent : CONNECTED");
+            Message message = Message.obtain(mHandler, AppConfig.RFID_CONN_SUCCESS);
+            mHandler.sendMessage(message);
+            mConnectedReader = true;
         }
     }
 
@@ -255,6 +263,13 @@ public class ApulseRFIDInstance implements ReaderEventListener {
 
 
     private void processTagData(String data) {
+        if(!mConnectedReader){
+            Log.d("onReaderDeviceStateChanged", "no RES but CONNECTED");
+            Message message = Message.obtain(mHandler, AppConfig.RFID_CONN_SUCCESS);
+            mHandler.sendMessage(message);
+            mConnectedReader = true;
+        }
+
         String epc = null;
         String rssi = null;
         String phase = null;
@@ -287,7 +302,6 @@ public class ApulseRFIDInstance implements ReaderEventListener {
             sideScanData.add(new RfidScanData(epc,Double.parseDouble(rssi),antenna,System.currentTimeMillis()));
         }else if(antenna.equals("1")){
             frontScanData.add(new RfidScanData(epc,Double.parseDouble(rssi),antenna,System.currentTimeMillis()));
-
         }
 
 
@@ -344,7 +358,6 @@ public class ApulseRFIDInstance implements ReaderEventListener {
 
     private void toggleInventory() {
 //        mInventoryButton.setEnabled(false);
-
         int result;
         if (mInventoryStarted) {
             result = mReader.stopOperation();
@@ -375,5 +388,22 @@ public class ApulseRFIDInstance implements ReaderEventListener {
             }
         }
     }
+
+
+    private boolean refreshDeviceCache(BluetoothGatt gatt){
+        try {
+            BluetoothGatt localBluetoothGatt = gatt;
+            Method localMethod = localBluetoothGatt.getClass().getMethod("refresh", new Class[0]);
+            if (localMethod != null) {
+                boolean bool = ((Boolean) localMethod.invoke(localBluetoothGatt, new Object[0])).booleanValue();
+                return bool;
+            }
+        }
+        catch (Exception localException) {
+            Log.e("refreshDeviceCache", "An exception occurred while refreshing device");
+        }
+        return false;
+    }
+
 
 }

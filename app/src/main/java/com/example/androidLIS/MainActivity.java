@@ -26,6 +26,7 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.TextureView;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -34,8 +35,6 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 
 import com.apulsetech.lib.remote.type.ConfigValues;
 import com.apulsetech.lib.remote.type.Msg;
@@ -57,6 +56,7 @@ import com.example.androidLIS.model.RfidScanData;
 import com.example.androidLIS.network.RetrofitClient;
 import com.example.androidLIS.network.RetrofitService;
 import com.example.androidLIS.permission.PermissionHelper;
+import com.example.androidLIS.sensor.AccelerometerSensor;
 import com.example.androidLIS.service.BluetoothService;
 import com.example.androidLIS.tof.Camera;
 import com.example.androidLIS.tof.DepthFrameAvailableListener;
@@ -64,19 +64,20 @@ import com.example.androidLIS.tof.DepthFrameVisualizer;
 import com.example.androidLIS.model.RackData;
 import com.example.androidLIS.util.AppConfig;
 import com.example.androidLIS.util.AppUtil;
-import com.example.androidLIS.util.FileUtil;
+import com.example.androidLIS.util.FileManager;
+import com.example.androidLIS.util.GsonUtil;
+import com.example.androidLIS.util.StatusMonitor;
 import com.google.zxing.Result;
 import com.orhanobut.hawk.Hawk;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.Locale;
 
 import io.reactivex.SingleObserver;
 import io.reactivex.android.schedulers.AndroidSchedulers;
@@ -84,7 +85,8 @@ import io.reactivex.disposables.Disposable;
 import io.reactivex.schedulers.Schedulers;
 import retrofit2.Response;
 import timber.log.Timber;
-
+import android.speech.tts.TextToSpeech;
+import static android.speech.tts.TextToSpeech.ERROR;
 
 /*  This is an example of getting and processing ToF data.
 
@@ -109,14 +111,14 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     CodeScannerView mCodeScannerView;
 
 
-    //Terabee sensor
+    //Terabee 거리센서
     public TerabeeInstance mTerabeeSensorInstance;
     public TerabeeHandler mTerabeeHandler;
 
+    //Apulse RFID 스캐너
     public ApulseRFIDInstance mApulseRFIDInstance;
     private RfidHandler mRfidHandler= new RfidHandler(this);
-    public boolean isRFConnected = false;
-
+    public boolean isRFConnectedReady = false;
     private BluetoothAdapter mBluetoothAdapter;
     private boolean mBleSupported = false;
     private static final boolean USE_USER_INTERACTIVE_PERMISSION = false;
@@ -124,16 +126,25 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     private static final int REQUEST_OVERLAY = 2;
 
     //텍스트 뷰어
-    TextView mCargoDepth;
-    TextView mQrText;
-    TextView mDisText;
-    TextView mCargoAddress;
-    TextView mTimeText;
+    public TextView mCargoDepth;
+    public TextView mQrText;
+    public TextView mDisText;
+    public TextView mCargoAddress;
+    public TextView mTimeText;
+    public TextView mWorkSpace;
+    public TextView mStatusQR;
+    public TextView mStatusTOF;
+    public TextView mStatusDIS;
+    public TextView mStatusRFID;
+    public TextView mStatusNET;
+    public TextView mStatusBAT;
 
+    //지게차 상태, 로그 뷰어
+    public TextView mCargoExpect;
     public TextView mRFsetLog;
+    LinearLayout mSettingSamplingLayout;
 
-    //지게차 상태 뷰어
-    LinearLayout mCargoExpect;
+
 
 
     /**
@@ -155,11 +166,14 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     /**
      * 최근 10초동안 정면 안테나 rssi 최대값
      */
-
-
     public String mOnRackEpc = "";
     public long mOnRackTime = 0;
+    public double mOnRackRssi = 0;
 
+    /**
+     * 현재 선반내 작업인지 판단
+     */
+    public boolean isShelf = false;
 
     /**
      * 현재 실은 짐의 이름
@@ -189,7 +203,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     public long mCurrentLoadIn = 0; // 최근 실은 시간
 
 
-
     /**
      * Viewmode
      * false : QR
@@ -197,32 +210,54 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
      */
     public static boolean viewMode = false;
 
+
     //Alive 스레드
     public Thread mAliveThread;
     //백엔드 alive
     public boolean mAlive = false;
 
 
-    //Alive 스레드
+    //Location 스레드
     public Thread mLocationThread;
-    //백엔드 alive
+    //백엔드 Location
     public boolean mLocation = false;
 
     //백엔드 alive 패킷 전송 실패 카운트
     public int mAliveFailCnt = 0;
 
-
-    //백엔드 통신
+    //백엔드 통신 서비스
     private RetrofitService mService;
 
-
+    //로그 저장 파일
+    FileManager mFileManager;
     File externalStorageDirectory = Environment.getExternalStorageDirectory();
     String externalStorageDirectoryPath = externalStorageDirectory.getAbsolutePath();
     String mLogDirectoryName = externalStorageDirectoryPath+"/WATALIS/CommonLog";
     String mRFIDLogDirectoryName = externalStorageDirectoryPath+"/WATALIS/RfidLog";
+    String mReserveFileName = "ReserveFile.json";
 
-    File mLogFile = null;
-    File mRFIDLogFile = null;
+    public File mLogFile = null;
+    public File mReserveFile = null;
+    public ArrayList<String> mReserveData;
+    public int mReserveIndex = 0;
+
+    public File mRFIDLogFile = null;
+
+   // 가속도 센서
+    public AccelerometerSensor mAccelerometerSensor;
+    public AccHandler mAccHandler;
+
+    //상태 모니터링
+    public StatusMonitor mStatusMonitor;
+    public StatusHandler mStatusHandler;
+    private TextToSpeech tts;              // TTS 변수 선언
+    WindowManager.LayoutParams params;
+    private float brightness; // 밝기값은 float형으로 저장되어 있습니다.
+
+    public boolean mBatterySavingMode = false;
+    public boolean mNetworkStatus = true;
+
+
 
 
     @Override
@@ -237,36 +272,86 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
          * 권한 체크
          */
         onCheckPermission();
-//        checkCamPermissions();
+
+        mFileManager = new FileManager(this);
+
+
         rawDataView = findViewById(R.id.rawData);
         mCargoDepth = (TextView) findViewById(R.id.CargoDepth);
-        mCargoExpect = (LinearLayout) findViewById(R.id.CargoExpect);
+        mCargoExpect = (TextView) findViewById(R.id.CargoExpect);
         mQrText = (TextView) findViewById(R.id.qrText);
         mDisText = (TextView) findViewById(R.id.distanceSensorText);
         mCargoAddress = (TextView) findViewById(R.id.cargoAddress);
         mTimeText = (TextView)findViewById(R.id.timeText);
+        mWorkSpace = (TextView)findViewById(R.id.workSpace);
+        mStatusQR = (TextView) findViewById(R.id.statusQR);
+        mStatusTOF = (TextView) findViewById(R.id.statusTOF);
+        mStatusDIS = (TextView) findViewById(R.id.statusDIS);
+        mStatusRFID = (TextView) findViewById(R.id.statusRFID);
+        mStatusNET = (TextView) findViewById(R.id.statusNET);
+        mStatusBAT = (TextView) findViewById(R.id.statusBAT);
 
+        mSettingSamplingLayout = (LinearLayout)findViewById(R.id.settingSamplingLayout);
 
         mCurrentRack = new RackData(1,"field",0);
         mBLEQueue = new ArrayList<String>();
         mCargo = new CargoData("cargo",0);
         mCodeScannerView = (CodeScannerView) findViewById(R.id.scanner_view);
         mCodeScannerView.setClickable(false);
+        params = getWindow().getAttributes();
 
+        /**
+         * 파라미터 초기화
+         */
         AppUtil.getInstance().initSettingParams();
+
+        /**
+         * 상태 모니터링
+         */
+        tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
+            @Override
+            public void onInit(int status) {
+                if(status != ERROR) {
+                    // 언어를 선택한다.
+                    tts.setLanguage(Locale.KOREAN);
+                }
+            }
+        });
+        mStatusHandler = new StatusHandler();
+        mStatusMonitor = new StatusMonitor(this, mStatusHandler);
+        mStatusMonitor.setOnBatteryAndNetworkChangeListener(new StatusMonitor.OnBatteryAndNetworkChangeListener() {
+            @Override
+            public void onBatteryPercentageChanged(int percentage) {
+                if(percentage < 15){
+                    mStatusMonitor.setStatusBattery(false, percentage);
+                }else{
+                    mStatusMonitor.setStatusBattery(true, percentage);
+                }
+            }
+
+            @Override
+            public void onNetworkStateChanged(boolean isConnected, String networkTypeName) {
+                if(!isConnected){
+                    mStatusMonitor.setStatusNetwork(false);
+                }else{
+                    if(!mStatusMonitor.isStatusNetwork())
+                        mStatusMonitor.setStatusNetwork(true);
+                }
+
+            }
+        });
+        mStatusMonitor.start();
+
+
         /**
          * 로그파일 생성
          */
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy_MM_dd");
         String currentDate = dateFormat.format(new Date());
-        mLogFile = FileUtil.createFileWithDate(mLogDirectoryName+"/"+currentDate);
-        mRFIDLogFile = FileUtil.createFileWithDate(mRFIDLogDirectoryName+"/"+currentDate);
-        if(!AppUtil.getInstance().isNetworkConnected(getApplicationContext())){
-            Log.d("network","not connected");
-        }else{
-            Log.d("network","connected");
-        }
-
+        mLogFile = mFileManager.createFileWithDate(mLogDirectoryName+"/"+currentDate);
+        mReserveFile = mFileManager.createFileIfNotExists(mReserveFileName);
+//        mRFIDLogFile = mFileManager.createFileWithDate(mRFIDLogDirectoryName+"/"+currentDate);
+        mReserveData = new ArrayList<String>(mFileManager.readFile(mReserveFile));
 
         if(android.os.Build.VERSION.SDK_INT >= 18)
             startService(new Intent(MainActivity.this, BluetoothService.class));
@@ -278,13 +363,14 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         platformSendAliveMessage();
 
 
-        mTerabeeHandler = new TerabeeHandler();
-        mTerabeeSensorInstance = new TerabeeInstance(getApplicationContext(),mTerabeeHandler);
-        mTerabeeSensorInstance.initTerabeeSensor();
 
 
+        /**
+         * Apulse RFID 스캐너 초기화
+         */
         mApulseRFIDInstance = new ApulseRFIDInstance(this,mRfidHandler);
-        mApulseRFIDInstance.startScan();
+
+
 
         boolean supported = getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH);
         if (supported) {
@@ -331,6 +417,14 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
             }
         }
 
+        /**
+         * 거리센서 초기화
+         */
+        mTerabeeHandler = new TerabeeHandler();
+        mTerabeeSensorInstance = new TerabeeInstance(getApplicationContext(),mTerabeeHandler);
+        mTerabeeSensorInstance.initTerabeeSensor();
+
+
 
         /**
          * QR스캔 시작
@@ -341,9 +435,17 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
          * TOF 카메라 시작
          */
         camera = new Camera(this, this);
-        camera.openFrontDepthCamera();
-
+        if(!camera.getCameraStatus()) {
+            camera.openFrontDepthCamera();
+        }
+        /**
+         * 가속도 센서 초기화
+         */
+        mAccHandler = new AccHandler();
+        mAccelerometerSensor = new AccelerometerSensor(this, mAccHandler);
+        mAccelerometerSensor.start();
     }
+
 
 
     /**
@@ -353,46 +455,24 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         @Override
         public void handleMessage(@NonNull Message msg) {
             super.handleMessage(msg);
+
             Bundle bundle = msg.getData();
             switch (bundle.getInt("type")){
                 case 1:
-                    setDistext(String.valueOf(bundle.getInt("floor")));
-                    setCurrentFloor(bundle.getInt("floor"));
+                    if(!mBatterySavingMode) {
+                        setDistext(String.valueOf(bundle.getInt("floor")));
+                        setCurrentFloor(bundle.getInt("floor"));
+                    }
                     break;
                 case 2:
-                    isTerabeeConn(bundle.getInt("connect"));
+                    if(bundle.getInt("connect") == 1){
+                        mStatusMonitor.setStatusSensorDistance(true);
+                    }else{
+                        mStatusMonitor.setStatusSensorDistance(false);
+                    }
                     break;
             }
         }
-    }
-
-    public void isTerabeeConn(int is){
-        if(is == 1){
-            runOnUiThread(new Runnable() {
-                public void run() {
-                    viewShortToast("sensor connected");
-                }
-            });
-        }else if(is == 0){
-            runOnUiThread(new Runnable() {
-                public void run() {
-                    viewShortToast("sensor not connected");
-                }
-            });
-        }else if(is == 2){
-            runOnUiThread(new Runnable() {
-                public void run() {
-                    viewShortToast("sensor disconnected");
-                }
-            });
-        }else if(is == 3){
-            runOnUiThread(new Runnable() {
-                public void run() {
-                    viewShortToast("sensor error");
-                }
-            });
-        }
-
     }
 
 
@@ -410,10 +490,10 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         public void handleMessage(@NonNull Message msg) {
             MainActivity activity = mWeakActivity.get();
             if (activity == null) {
-                Log.d("handleMessage()", " activity is null!");
+                Log.d("RFhandleMessage()", " activity is null!");
                 return;
             }
-            Log.d("handleMessage()", "msg=" + msg.what);
+            Log.d("RFhandleMessage()", "msg=" + msg.what);
             switch (msg.what) {
                 case Msg.BT_SPP_ADD_DEVICE:
                     BluetoothDevice btDevice = (BluetoothDevice) msg.obj;
@@ -445,10 +525,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                                         Toast.LENGTH_LONG).show();
                                 return;
                             } else {
-                                Log.e("Connect", AppConfig.RFID_MAC + " conn success");
-                                Toast.makeText(MainActivity.this,
-                                        "Connect Success",
-                                        Toast.LENGTH_LONG).show();
                                 String jsonDevice = remoteDevice.toGson();
                                 if (!mApulseRFIDInstance.mPreviouslyConnectedDevices.contains(jsonDevice)) {
                                     mApulseRFIDInstance.mPreviouslyConnectedDevices.add(jsonDevice);
@@ -463,29 +539,39 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                 case AppConfig.RFID_SCAN_RESULT:
                     ArrayList<RfidScanData> frontData = mApulseRFIDInstance.getFrontScanData();
                     ArrayList<RfidScanData> sideData = mApulseRFIDInstance.getSideScanData();
-                    String RFIDLogText = "";
+//                    String RFIDLogText = "";
                     long now = System.currentTimeMillis();
-                    SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);
-                    String formatTime = dateFormat.format(now);
-
+//                    SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);
+//                    String formatTime = dateFormat.format(now);
                     int frontMaxRssiIndex = getMaxRssiIndex(frontData);
                     int sideMaxRssiIndex = getMaxRssiIndex(sideData);
 
                     if(now - mOnRackTime > AppConfig.ON_RACK_THRESHOLD){
                         mOnRackTime = 0;
-                        mOnRackEpc = "";
+                        mOnRackEpc = "field";
+                        isShelf = false;
                     }
 
                     if(frontData.size()>0) {
+                        mOnRackRssi = frontData.get(frontMaxRssiIndex).rssi;
                         if (frontData.get(frontMaxRssiIndex).rssi >= AppConfig.ON_RACK_RSSI) {
                             mOnRackEpc = frontData.get(frontMaxRssiIndex).epc;
+                            isShelf = true;
+                            mOnRackTime = now;
+                        }else if(mCurrentRack.floor > 1500){
+                            mOnRackEpc = frontData.get(frontMaxRssiIndex).epc;
+                            isShelf = true;
                             mOnRackTime = now;
                         }
+                    }else if(sideData.size()>0){
+                        mOnRackRssi = sideData.get(sideMaxRssiIndex).rssi;
+                    }else{
+                        mOnRackRssi = 0;
                     }
-                    setTimeText(mOnRackEpc);
+                    setWorkSpaceText(mOnRackEpc);
 
-                    RFIDLogText = "[" + formatTime + "]\n"+"front size:"+frontData.size() + ", side size:"+sideData.size()+"\n";
-                    Log.e("scandata", "front size:"+frontData.size() + ", side size:"+sideData.size());
+                    Log.e("scandata", "front size:"+frontData.size() +
+                            "\nside size:"+sideData.size());
                     if(frontMaxRssiIndex != -1){
                         setCurrentRack(frontData.get(frontMaxRssiIndex).epc);
                         setCargoAddress(frontData.get(frontMaxRssiIndex).epc +"//"+frontData.get(frontMaxRssiIndex).rssi);
@@ -499,37 +585,222 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                     }
 
 
-                    if(frontData.size()!=0) {
-                        RFIDLogText = RFIDLogText + "FRONT_DATA:\n";
-                        for(int i =0 ; i < frontData.size() ; i++){
-                            if(i == frontMaxRssiIndex){
-                                RFIDLogText = RFIDLogText + "**";
-                            }
-                            RFIDLogText = RFIDLogText +frontData.get(i).epc + "(" + frontData.get(i).rssi + ")\n";
-                        }
-                        Log.e("scandata", "front:" + frontData.get(frontMaxRssiIndex).epc + "[" + frontData.get(frontMaxRssiIndex).rssi + "]");
-                    }
+//                    RFIDLogText = "[" + formatTime + "]\n"+"front size:"+frontData.size() + ", side size:"+sideData.size()+"\n";
+//                    if(frontData.size()!=0) {
+//                        RFIDLogText = RFIDLogText + "FRONT_DATA:\n";
+//                        for(int i =0 ; i < frontData.size() ; i++){
+//                            if(i == frontMaxRssiIndex){
+//                                RFIDLogText = RFIDLogText + "**";
+//                            }
+//                            RFIDLogText = RFIDLogText +frontData.get(i).epc + "(" + frontData.get(i).rssi + ")\n";
+//                        }
+//                        Log.e("scandata", "front:" + frontData.get(frontMaxRssiIndex).epc + "[" + frontData.get(frontMaxRssiIndex).rssi + "]");
+//                    }
+//
+//                    if(sideData.size() !=0) {
+//                        RFIDLogText = RFIDLogText + "SIDE_DATA:\n";
+//                        for(int i =0 ; i < sideData.size() ; i++){
+//                            if(i == sideMaxRssiIndex){
+//                                RFIDLogText = RFIDLogText + "**";
+//                            }
+//                            RFIDLogText = RFIDLogText +sideData.get(i).epc + "(" + sideData.get(i).rssi + ")\n";
+//                        }
+//                        Log.e("scandata", "side:" + sideData.get(sideMaxRssiIndex).epc + "[" + sideData.get(sideMaxRssiIndex).rssi + "]");
+//                    }
+//                    mFileManager.writeDataToFile(mRFIDLogFile, RFIDLogText+"\n\n");
 
-                    if(sideData.size() !=0) {
-                        RFIDLogText = RFIDLogText + "SIDE_DATA:\n";
-                        for(int i =0 ; i < sideData.size() ; i++){
-                            if(i == sideMaxRssiIndex){
-                                RFIDLogText = RFIDLogText + "**";
-                            }
-                            RFIDLogText = RFIDLogText +sideData.get(i).epc + "(" + sideData.get(i).rssi + ")\n";
-                        }
-                        Log.e("scandata", "side:" + sideData.get(sideMaxRssiIndex).epc + "[" + sideData.get(sideMaxRssiIndex).rssi + "]");
-                    }
-                    FileUtil.writeDataToFile(mRFIDLogFile, RFIDLogText+"\n\n");
-
-                    if(mLocationThread == null){
+                    if (mLocationThread == null) {
                         platformSendLocationMessage();
                     }
 
                     break;
 
+                case AppConfig.RFID_CONN_FAIL:
+                    mStatusMonitor.setStatusRFIDScanner(false);
+                    break;
+
+
+                case AppConfig.RFID_CONN_SUCCESS:
+                    mStatusMonitor.setStatusRFIDScanner(true);
+                    break;
+
+                case AppConfig.RFID_CONN_READY:
+                    isRFConnectedReady = true;
+                    if(!mApulseRFIDInstance.mConnectedReader) {
+                        Log.d("RFID_CONN_READY", "WHAT");
+                        mApulseRFIDInstance.startScan();
+                    }
+                    break;
+
             }
         }
+    }
+
+
+    /**
+     * 가속도 센서 핸들러
+     */
+    public class AccHandler extends Handler{
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            super.handleMessage(msg);
+            Bundle bundle = msg.getData();
+            mStatusMonitor.setStatusSensorAcceleroMeter(bundle.getDouble("acc"));
+        }
+
+    }
+
+
+    /**
+     * 상태 모니터링 핸들러
+     */
+    public class StatusHandler extends Handler{
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            super.handleMessage(msg);
+            Bundle bundle = msg.getData();
+            boolean status = bundle.getBoolean("status");
+            int type = bundle.getInt("type");
+            switch (type){
+                case 0: //QR 카메라
+                    if(status){
+                        mStatusQR.setBackgroundColor(Color.parseColor("#339900"));
+                    }else{
+                        mStatusQR.setBackgroundColor(Color.parseColor("#993300"));
+                        if(!mBatterySavingMode) {
+                            viewShortToast("카메라 연결 안됨");
+                            tts.setPitch(3.0f);
+                            tts.setSpeechRate(1.0f);
+                            tts.speak("카메라 연결 실패", TextToSpeech.QUEUE_ADD, null);
+                            platformSendErrorMessage(AppConfig.ALIVE_ERROR_QR);
+                        }
+                    }
+                    break;
+                case 1: // TOF 카메라
+                    if(status){
+                        mStatusTOF.setBackgroundColor(Color.parseColor("#339900"));
+                    }else {
+                        mStatusTOF.setBackgroundColor(Color.parseColor("#993300"));
+                        if(!mBatterySavingMode) {
+                            viewShortToast("TOF 연결 안됨");
+                            tts.setPitch(3.0f);
+                            tts.setSpeechRate(1.0f);
+                            tts.speak("TOF 연결 실패", TextToSpeech.QUEUE_ADD, null);
+                            platformSendErrorMessage(AppConfig.ALIVE_ERROR_TOF);
+
+                        }
+                    }
+                    break;
+                case 2: // 거리센서
+                    if(status){
+                        mStatusDIS.setBackgroundColor(Color.parseColor("#339900"));
+                    }else {
+                        mStatusDIS.setBackgroundColor(Color.parseColor("#993300"));
+                        if(!mBatterySavingMode) {
+                            viewShortToast("거리센서 연결 안됨");
+                            tts.setPitch(3.0f);
+                            tts.setSpeechRate(1.0f);
+                            tts.speak("거리센서 연결 실패", TextToSpeech.QUEUE_ADD, null);
+                            platformSendErrorMessage(AppConfig.ALIVE_ERROR_DISTANCE);
+                        }
+                    }
+                    break;
+                case 3: // RFID 스캐너
+                    if(status){
+                        mStatusRFID.setBackgroundColor(Color.parseColor("#339900"));
+                    }else {
+                        mStatusRFID.setBackgroundColor(Color.parseColor("#993300"));
+                        if(!mBatterySavingMode) {
+                            viewShortToast("RFID 연결 안됨");
+                            tts.setPitch(3.0f);
+                            tts.setSpeechRate(1.0f);
+                            tts.speak("RFID 연결 실패", TextToSpeech.QUEUE_ADD, null);
+                            platformSendErrorMessage(AppConfig.ALIVE_ERROR_RFID);
+                        }
+                    }
+                    break;
+                case 4: // 네트워크
+                    if(status){
+                        mStatusNET.setBackgroundColor(Color.parseColor("#339900"));
+                        mNetworkStatus = true;
+                    }else {
+                        mNetworkStatus = false;
+                        mStatusNET.setBackgroundColor(Color.parseColor("#993300"));
+                        if(!mBatterySavingMode) {
+                            viewShortToast("네트워크 연결 안됨");
+                            tts.setPitch(3.0f);
+                            tts.setSpeechRate(1.0f);
+                            tts.speak("네트워크 연결 실패", TextToSpeech.QUEUE_ADD, null);
+                        }
+                    }
+                    break;
+                case 5: // 배터리
+                    int value = bundle.getInt("value");
+                    if(status){
+                        mStatusBAT.setBackgroundColor(Color.parseColor("#339900"));
+                        mStatusBAT.setText(""+value);
+                    }else {
+                        mStatusBAT.setBackgroundColor(Color.parseColor("#993300"));
+                        mStatusBAT.setText(""+value);
+                        viewShortToast("배터리 없음");
+                        platformSendErrorMessage(AppConfig.ALIVE_ERROR_BATTERY);
+                    }
+                    break;
+                case 6: // 가속도센서
+                    if(status){//움직임
+                        mBatterySavingMode = false;
+                        if(!camera.getCameraStatus()) {
+                            camera.openFrontDepthCamera();
+                        }
+                        if(mCodeScanner != null) {
+                            mCodeScanner.startPreview();
+                            mStatusMonitor.setStatusCameraQR(true);
+                        }
+                        if(isRFConnectedReady && !mApulseRFIDInstance.mConnectedReader) {
+                            mApulseRFIDInstance.startScan();
+                        }else if(!mApulseRFIDInstance.mInventoryStarted) {
+                            mApulseRFIDInstance.toogleScan();
+                        }
+                        params.screenBrightness = brightness;
+                        getWindow().setAttributes(params);
+                        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+                        mStatusMonitor.checkAllStatus();
+                    }else {//멈춤
+                        mBatterySavingMode = true;
+                        if(mCodeScanner != null) {
+                            mCodeScanner.releaseResources();
+                            mStatusMonitor.setStatusCameraQR(false);
+                        }
+                        if(camera != null){
+                            camera.closeCamera();
+                        }
+                        if(mApulseRFIDInstance.mInventoryStarted) {
+                            mApulseRFIDInstance.toogleScan();
+                        }
+
+                        // 기존 밝기 저장
+                        brightness = params.screenBrightness;
+                        // 최대 밝기로 설정
+                        params.screenBrightness = 0.0f;
+                        // 밝기 설정 적용
+                        getWindow().setAttributes(params);
+                        getWindow().addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+                    }
+                    break;
+                case 7: // 준비 완료
+                    if(status){
+                        tts.setPitch(3.0f);
+                        tts.setSpeechRate(1.0f);
+                        tts.speak("사용 준비 완료", TextToSpeech.QUEUE_ADD, null);
+                        if(mReserveData.size() > 0){
+                            platformReserveMessage();
+                        }
+                    }
+                    break;
+            }
+
+        }
+
     }
 
     public int getMaxRssiIndex(ArrayList<RfidScanData> data){
@@ -547,7 +818,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
             return -1;
         }
     }
-
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -584,7 +854,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         long now = System.currentTimeMillis();
         SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);
         String formatTime = dateFormat.format(now);
-//        setTimeText(formatTime);
+        setTimeText(formatTime);
         switch (getCargoStatus()){
             case 0://짐이 없는 상황
                 if(status){//짐이 없었는데 생김
@@ -615,9 +885,12 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                      * 현재 높이 : mCurrentRack.floor
                      * 현재 짐의 부피 : mCurrentCargoVolume
                      */
-                    logText = "[" + formatTime + "]" + "EVENT:"+AppConfig.GET_IN + ", RACK_ID:" + mCurrentRack.rack + ", CARGO_ID:" + mCurrentLoadCargo + ", Height:" + mCurrentRack.floor + ", Volume:" + mLoadInCargoVolume + "\n";
+                    logText = "[" + formatTime + "]" + "EVENT:"+AppConfig.GET_IN + ", RACK_ID:" + mCurrentRack.rack + ", CARGO_ID:" + mCurrentLoadCargo +
+                            ", Height:" + mCurrentRack.floor + ", Volume:" + mLoadInCargoVolume +", RSSI:"+ mOnRackRssi+"\n";
                     viewShortToast(logText);
-                    FileUtil.writeDataToFile(mLogFile,logText);
+                    Log.e("PROCCESS_LIS", logText);
+
+                    mFileManager.writeDataToFile(mLogFile,logText);
                     int[] defaultMatrix ={0,0,0,0,0,0,0,0,0,0};
 
                     //백엔드 연동 추가
@@ -625,6 +898,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                             , AppConfig.GET_IN
                             , AppConfig.VEHICLE_ID
                             , mCurrentRack.rack
+                            , isShelf
                             , String.valueOf(mCurrentRack.floor)
                             , mCurrentLoadCargo
                             , "0"
@@ -636,9 +910,12 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                     int[] defaultMatrix ={0,0,0,0,0,0,0,0,0,0};
                     this.mCurrentLoadIn = 0;
                     setCargoAddress("field");
-                    logText ="[" + formatTime + "]" +  "EVENT:"+AppConfig.GET_IN + ", RACK_ID:" + "Field" + ", CARGO_ID:" + mCurrentLoadCargo + ", Height:" + mCurrentRack.floor + ", Volume:" + mLoadInCargoVolume+ "\n";
+                    logText ="[" + formatTime + "]" +  "EVENT:"+AppConfig.GET_IN + ", RACK_ID:" + "Field" +
+                            ", CARGO_ID:" + mCurrentLoadCargo + ", Height:" + mCurrentRack.floor + ", Volume:" + mLoadInCargoVolume+", RSSI:"+ mOnRackRssi+"\n";
                     viewShortToast(logText);
-                    FileUtil.writeDataToFile(mLogFile,logText);
+                    Log.e("PROCCESS_LIS", logText);
+
+                    mFileManager.writeDataToFile(mLogFile,logText);
 
                     //백엔드 연동 추가
                     platformActionInfoMessage(new ActionInfoReqData(new ActionInfo(AppConfig.WORK_LOCATION_ID
@@ -670,9 +947,12 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                 if ((now - mCurrentRack.time) < 5000
                         && mCurrentRack.rack.equals(mOnRackEpc)) {
                     //내린 선반 입력''''
-                    logText = "[" + formatTime + "]" + "EVENT:"+AppConfig.GET_OUT + ", RACK_ID:" + mCurrentRack.rack + ", CARGO_ID:" + mCurrentLoadCargo + ", Height:" + mCurrentRack.floor + ", Volume:" + mLoadInCargoVolume+ "\n";
-                    FileUtil.writeDataToFile(mLogFile,logText);
+                    logText = "[" + formatTime + "]" + "EVENT:"+AppConfig.GET_OUT + ", RACK_ID:" + mCurrentRack.rack +
+                            ", CARGO_ID:" + mCurrentLoadCargo + ", Height:" + mCurrentRack.floor + ", Volume:" + mLoadInCargoVolume+", RSSI:"+ mOnRackRssi+"\n";
+                    mFileManager.writeDataToFile(mLogFile,logText);
                     viewShortToast(logText);
+                    Log.e("PROCCESS_LIS", logText);
+
                     //백엔드 연동 추가
                     platformActionInfoMessage(new ActionInfoReqData(new ActionInfo(AppConfig.WORK_LOCATION_ID
                             , AppConfig.GET_OUT
@@ -692,9 +972,11 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                     //선반이 아닌곳에 내림
 //                    mCurrentPosition = new PositionData(1,"field",now);
                     setCargoAddress("field");
-                    logText = "[" + formatTime + "]" + "EVENT:"+AppConfig.GET_OUT + ", RACK_ID:" + "Field"+ ", CARGO_ID:" + mCurrentLoadCargo + ", Height:" + mCurrentRack.floor + ", Volume:" + mLoadInCargoVolume+ "\n";
+                    logText = "[" + formatTime + "]" + "EVENT:"+AppConfig.GET_OUT + ", RACK_ID:" + "Field"+ ", CARGO_ID:"
+                            + mCurrentLoadCargo + ", Height:" + mCurrentRack.floor + ", Volume:" + mLoadInCargoVolume+ ", RSSI:"+ mOnRackRssi+"\n";
                     viewShortToast(logText);
-                    FileUtil.writeDataToFile(mLogFile,logText);
+                    Log.e("PROCCESS_LIS", logText);
+                    mFileManager.writeDataToFile(mLogFile,logText);
 
                     //백엔드 연동 추가
                     platformActionInfoMessage(new ActionInfoReqData(new ActionInfo(AppConfig.WORK_LOCATION_ID
@@ -720,13 +1002,15 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         if(status) {
             runOnUiThread(new Runnable() {
                 public void run() {
-                    mCargoExpect.setBackgroundColor(Color.parseColor("#993300"));
+                    mCargoExpect.setText("Pick Up");
+                    mCargoExpect.setTextColor(Color.parseColor("#ff3300"));
                 }
             });
         }else{
             runOnUiThread(new Runnable() {
                 public void run() {
-                    mCargoExpect.setBackgroundColor(Color.parseColor("#339900"));
+                    mCargoExpect.setText("Normal");
+                    mCargoExpect.setTextColor(Color.parseColor("#33ff00"));
                 }
             });
         }
@@ -748,9 +1032,12 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         if(mCargoStatus == 0) {
             mCurrentCargoVolume = volume;
             mCurrentCargoVolumeMatrix = matrix;
-            Log.e("matrix10x1", Arrays.toString(mCurrentCargoVolumeMatrix));
         }
 
+    }
+    @Override
+    public void onTOFStatus(boolean status){
+        mStatusMonitor.setStatusCameraTOF(status);
     }
 
 
@@ -797,7 +1084,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     private void startScanning() {
         if(mCodeScanner == null) {
             final CodeScannerView scannerView = findViewById(R.id.scanner_view);
-
             mCodeScanner = new CodeScanner(this,scannerView,0);
 //            mCodeScanner.setView(scannerView);
             mCodeScanner.setScanMode(CONTINUOUS);
@@ -806,7 +1092,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
             mCodeScanner.setAutoFocusInterval(500);
             mCodeScanner.setZoom(0);
 //            mCodeScanner.setCamera(-1);
-            Log.d("scanner", "set");
             mCodeScanner.setDecodeCallback(new DecodeCallback() {
                 @Override
                 public void onDecoded(@NonNull final Result result) {
@@ -819,6 +1104,13 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
                 }
             });
+
+            String camera = String.valueOf(mCodeScanner.getCamera());
+            if(camera != null) {
+                mStatusMonitor.setStatusCameraQR(true);
+            }else{
+                mStatusMonitor.setStatusCameraQR(false);
+            }
         }else{
             Log.d("scanner", "alreadyset");
         }
@@ -888,6 +1180,15 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         });
     }
 
+    //작업 공간 텍스트뷰
+    public void setWorkSpaceText(String s){
+        runOnUiThread(new Runnable() {
+            public void run() {
+                mWorkSpace.setText(s);
+            }
+        });
+    }
+
     /**
      * 뷰모드
      * TOF <-> QR
@@ -899,10 +1200,12 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
             rawDataView.setVisibility(View.VISIBLE);
             mCodeScannerView.setVisibility(View.INVISIBLE);
             viewChanger.setText("QR");
+            mSettingSamplingLayout.setVisibility(View.VISIBLE);
             viewMode = true;
         }else{
             rawDataView.setVisibility(View.INVISIBLE);
             mCodeScannerView.setVisibility(View.VISIBLE);
+            mSettingSamplingLayout.setVisibility(View.INVISIBLE);
             viewChanger.setText("TOF");
             viewMode = false;
         }
@@ -929,7 +1232,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                         ResponseData res = response.body();
                         if(res != null) {
                             mAliveFailCnt = 0;
-//                            connBLE();
                             Log.d("AliveResdata", res.toString());
                         }
                     }
@@ -952,25 +1254,51 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
      * @param data
      */
     public void platformActionInfoMessage(ActionInfoReqData data){
-        mService.ACTION_INFO_MESSAGE(data).subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(new SingleObserver<Response<ResponseData>>() {
-                    @Override
-                    public void onSubscribe(Disposable d) {
-                    }
-                    @Override
-                    public void onSuccess(Response<ResponseData>response) {
-                        ResponseData res = response.body();
-                        if(res != null) {
-                            Log.d("ActionInfoResdata", res.toString());
+        if(!mNetworkStatus){
+            mFileManager.writeFile(mReserveFile,GsonUtil.toJson(data));
+        }else {
+            mService.ACTION_INFO_MESSAGE(data).subscribeOn(Schedulers.io())
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(new SingleObserver<Response<ResponseData>>() {
+                        @Override
+                        public void onSubscribe(Disposable d) {
                         }
-                    }
 
-                    @Override
-                    public void onError(Throwable e) {
-                        e.printStackTrace();
-                    }
-                });
+                        @Override
+                        public void onSuccess(Response<ResponseData> response) {
+                            ResponseData res = response.body();
+                            if (res != null) {
+                                Log.d("ActionInfoResdata", res.toString());
+                            }
+                            if (mReserveIndex < mReserveData.size()) {
+                                mReserveIndex++;
+                                platformReserveMessage();
+                            } else {
+                                if(mReserveData.size() > 0) {
+                                    mReserveData.clear();
+                                    mReserveIndex = 0;
+                                    mFileManager.clearFile(mReserveFile);
+                                }
+                            }
+                        }
+
+                        @Override
+                        public void onError(Throwable e) {
+                            e.printStackTrace();
+                        }
+                    });
+        }
+    }
+
+
+    /**
+     * 백엔드 연동
+     * 저장된 Action 패킷 전송
+     */
+    public void platformReserveMessage(){
+        if(mReserveIndex < mReserveData.size()){
+            platformActionInfoMessage(GsonUtil.fromJson(mReserveData.get(mReserveIndex),ActionInfoReqData.class));
+        }
     }
 
 
@@ -1004,7 +1332,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
 
 
     public void testpp(View v ){
-       mApulseRFIDInstance.startScan();
+        camera.closeCamera();
     }
 
 
@@ -1019,7 +1347,9 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
             @Override
             public void run() {
                 while (mAlive) {
-                    platformAliveMessage(new AliveReqData(new Alive(AppConfig.WORK_LOCATION_ID,AppConfig.VEHICLE_ID,"0000")));
+                    if(!mBatterySavingMode) {
+                        platformAliveMessage(new AliveReqData(new Alive(AppConfig.WORK_LOCATION_ID, AppConfig.VEHICLE_ID, "0000")));
+                    }
                     try {
                         Thread.sleep(30000);
                     } catch (InterruptedException ie) {
@@ -1044,7 +1374,9 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
             @Override
             public void run() {
                 while (mLocation) {
-                    platformLocationMessage(new LocationInfoReqData(new LocationInfo(AppConfig.WORK_LOCATION_ID,AppConfig.VEHICLE_ID,LocationEPC)));
+                    if(!mBatterySavingMode) {
+                        platformLocationMessage(new LocationInfoReqData(new LocationInfo(AppConfig.WORK_LOCATION_ID, AppConfig.VEHICLE_ID, LocationEPC)));
+                    }
                     try {
                         Thread.sleep(500);
                     } catch (InterruptedException ie) {
@@ -1057,16 +1389,16 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         mLocationThread.start();
     }
 
-
-
-    //플랫폼 alive 신호 전송
+    //플랫폼 Error 메시지 전송
     public void platformSendErrorMessage(String errorCode){
         platformAliveMessage(new AliveReqData(new Alive(AppConfig.WORK_LOCATION_ID,AppConfig.VEHICLE_ID,errorCode)));
     }
 
 
-
-
+    /**
+     * 파라미터 설정 기능 버튼
+     * @param v
+     */
     public void settingParameter(View v){
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_setting, null);
         final EditText serverID = dialogView.findViewById(R.id.platformURL);
@@ -1166,11 +1498,18 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     }
 
     public void viewShortToast(String str){
-        Toast.makeText(this, str, Toast.LENGTH_SHORT).show();
+        runOnUiThread(new Runnable() {
+            public void run() {
+                Toast.makeText(getApplicationContext(), str, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
 
-
+    /**
+     * 샘플링 위치 설정기능
+     * @param v
+     */
     public void settingSampling(View v){
         switch (v.getId()){
             case R.id.sampling_fork_gap_add:
@@ -1228,15 +1567,16 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                 viewShortToast("한번 더 누르면 종료됩니다");
                 return;
             } else {
+                mBatterySavingMode = true;
                 mAlive = false;
                 mLocation = false;
                 if(mCodeScanner != null) {
                     mCodeScanner.releaseResources();
                 }
-
                 mTerabeeSensorInstance.closeInstance();
                 mApulseRFIDInstance.closeInstance();
-
+                mAccelerometerSensor.stop();
+                mStatusMonitor.stop();
                 stopService(new Intent(MainActivity.this, BluetoothService.class));
                 finishAndRemoveTask();
             }
@@ -1247,33 +1587,41 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     @Override
     protected void onResume() {
         super.onResume();
-        if(camera != null){
+        mBatterySavingMode = false;
+        if(!camera.getCameraStatus()) {
             camera.openFrontDepthCamera();
         }
-
         if(mCodeScanner != null) {
             mCodeScanner.startPreview();
+            mStatusMonitor.setStatusCameraQR(true);
         }
-
-        mApulseRFIDInstance.stopScan();
-
+        if(isRFConnectedReady && !mApulseRFIDInstance.mConnectedReader) {
+            mApulseRFIDInstance.startScan();
+        }else if(!mApulseRFIDInstance.mInventoryStarted) {
+            mApulseRFIDInstance.toogleScan();
+        }
     }
 
     @Override
     protected void onPause() {
+        mBatterySavingMode = true;
         if(mCodeScanner != null) {
             mCodeScanner.releaseResources();
+            mStatusMonitor.setStatusCameraQR(false);
         }
-
-        mApulseRFIDInstance.stopScan();
-
-
+        if(camera != null){
+            camera.closeCamera();
+        }
+        if(mApulseRFIDInstance.mInventoryStarted) {
+            mApulseRFIDInstance.toogleScan();
+        }
         super.onPause();
     }
 
 
     @Override
     protected void onDestroy() {
+        mBatterySavingMode = true;
         mAlive = false;
         mLocation = false;
         if(mCodeScanner != null) {
@@ -1281,29 +1629,18 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
         }
         mTerabeeSensorInstance.closeInstance();
         mApulseRFIDInstance.closeInstance();
-
+        mAccelerometerSensor.stop();
+        mStatusMonitor.stop();
         stopService(new Intent(MainActivity.this, BluetoothService.class));
         super.onDestroy();
     }
 
 
-    private boolean refreshDeviceCache(BluetoothGatt gatt){
-        try {
-            BluetoothGatt localBluetoothGatt = gatt;
-            Method localMethod = localBluetoothGatt.getClass().getMethod("refresh", new Class[0]);
-            if (localMethod != null) {
-                boolean bool = ((Boolean) localMethod.invoke(localBluetoothGatt, new Object[0])).booleanValue();
-                return bool;
-            }
-        }
-        catch (Exception localException) {
-            Log.e("refreshDeviceCache", "An exception occurred while refreshing device");
-        }
-        return false;
-    }
 
 
-    //권한 확인
+    /**
+     * 권한 확인
+      */
     private void onCheckPermission() {
         if (Build.VERSION.SDK_INT >= 23) {
             permissionHelper = new PermissionHelper(this,

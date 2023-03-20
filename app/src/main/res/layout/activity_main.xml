@@ -14,50 +14,88 @@
         android:theme="@style/AppTheme.AppBarOverlay">
 
         <LinearLayout
-            android:id="@+id/CargoExpect"
             android:layout_width="match_parent"
-            android:layout_height="70dp"
-            android:background="#339900"
-            android:orientation="vertical"
-            android:layout_gravity="center"
-            android:gravity="center"
-            >
-            <LinearLayout
-                android:id="@+id/CargoLayout"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintLeft_toLeftOf="parent"
-                app:layout_constraintRight_toRightOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"
-                android:orientation="vertical"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="#777777">
+            <TextView
+                android:id="@+id/statusQR"
+                android:layout_width="wrap_content"
+                android:layout_height="50dp"
+                android:text="QR"
+                android:textColor="#ffffff"
+                android:textSize="15dp"
+                android:textStyle="bold"
+                android:layout_weight="1"
                 android:gravity="center"
-                android:layout_marginBottom="5dp"
-                >
+                android:background="#993300"
+                android:layout_margin="2dp"/>
 
-                <TextView
-                    android:id="@+id/CargoDepth"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="TOF"
-                    android:textColor="#ffffff"
-                    android:gravity="center"
-                    android:textSize="20dp"
-                    android:layout_gravity="center"
-                    android:layout_marginBottom="2dp"
-                    />
+            <TextView
+                android:id="@+id/statusTOF"
+                android:layout_width="wrap_content"
+                android:layout_height="50dp"
+                android:text="TOF"
+                android:textColor="#ffffff"
+                android:textSize="15dp"
+                android:textStyle="bold"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:background="#993300"
+                android:layout_margin="2dp"/>
 
+            <TextView
+                android:id="@+id/statusDIS"
+                android:layout_width="wrap_content"
+                android:layout_height="50dp"
+                android:text="DIS"
+                android:textColor="#ffffff"
+                android:textSize="15dp"
+                android:textStyle="bold"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:background="#993300"
+                android:layout_margin="2dp"/>
 
+            <TextView
+                android:id="@+id/statusRFID"
+                android:layout_width="wrap_content"
+                android:layout_height="50dp"
+                android:text="RFID"
+                android:textColor="#ffffff"
+                android:textSize="15dp"
+                android:textStyle="bold"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:background="#993300"
+                android:layout_margin="2dp"/>
 
-                <TextView
-                    android:id="@+id/distanceSensorText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="거리센서"
-                    android:textSize="20dp"
-                    android:textColor="#ffffff"
-                    android:gravity="center"/>
-            </LinearLayout>
+            <TextView
+                android:id="@+id/statusNET"
+                android:layout_width="wrap_content"
+                android:layout_height="50dp"
+                android:text="NET"
+                android:textColor="#ffffff"
+                android:textSize="15dp"
+                android:textStyle="bold"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:background="#993300"
+                android:layout_margin="2dp"/>
+
+            <TextView
+                android:id="@+id/statusBAT"
+                android:layout_width="wrap_content"
+                android:layout_height="50dp"
+                android:text="BAT"
+                android:textColor="#ffffff"
+                android:textSize="15dp"
+                android:textStyle="bold"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:background="#993300"
+                android:layout_margin="2dp"/>
+
         </LinearLayout>
 
         <androidx.constraintlayout.widget.ConstraintLayout
@@ -132,13 +170,13 @@
 
 <!--                />-->
 
-<!--            <Button-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:text="TEST"-->
-<!--                android:onClick="testpp"-->
-<!--                app:layout_constraintLeft_toRightOf="@+id/settingBtn"-->
-<!--                app:layout_constraintBottom_toBottomOf="parent"/>-->
+            <Button
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="TEST"
+                android:onClick="testpp"
+                app:layout_constraintLeft_toRightOf="@+id/settingBtn"
+                app:layout_constraintBottom_toBottomOf="parent"/>
 
 
 
@@ -147,9 +185,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-
                 app:layout_constraintLeft_toLeftOf="parent"
-                app:layout_constraintBottom_toTopOf="@+id/settingBtn">
+                app:layout_constraintBottom_toTopOf="@+id/settingBtn"
+                android:visibility="invisible">
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -292,47 +330,173 @@
                 </LinearLayout>
             </LinearLayout>
 
-
-
-
-            <TextView
-                android:id="@+id/qrText"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="QR 스캔"
-                android:textSize="20dp"
-                android:textColor="#ffffff"
-                android:gravity="center"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintLeft_toLeftOf="parent"
-                app:layout_constraintRight_toRightOf="parent"/>
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintBottom_toTopOf="@id/settingSamplingLayout"
+                android:orientation="vertical">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="상태: "
+                        android:textSize="12dp"
+                        android:textColor="#ffffff" />
+                    <TextView
+                        android:id="@+id/CargoExpect"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Normal"
+                        android:textColor="#ffffff"
+                        android:textSize="12dp"
+                        android:textStyle="bold"
+                        android:layout_gravity="center"
+                        android:layout_marginBottom="2dp"
+                        />
+                </LinearLayout>
 
 
-            <TextView
-                android:id="@+id/cargoAddress"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="위치"
-                android:textSize="20dp"
-                android:textColor="#ffffff"
-                android:gravity="center"
-                app:layout_constraintTop_toBottomOf="@id/qrText"
-                app:layout_constraintLeft_toLeftOf="parent"
-                app:layout_constraintRight_toRightOf="parent"/>
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="샘플링 거리: "
+                        android:textSize="12dp"
+                        android:textColor="#ffffff" />
+                    <TextView
+                        android:id="@+id/CargoDepth"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="TOF"
+                        android:textColor="#ffffff"
+                        android:textSize="12dp"
+                        android:layout_gravity="center"
+                        android:layout_marginBottom="2dp"
+                        />
+                </LinearLayout>
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="높이: "
+                        android:textSize="12dp"
+                        android:textColor="#ffffff" />
+                    <TextView
+                        android:id="@+id/distanceSensorText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="거리센서"
+                        android:textSize="12dp"
+                        android:textColor="#ffffff"
+                        />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="QR: "
+                        android:textSize="12dp"
+                        android:textColor="#ffffff" />
+
+                    <TextView
+                        android:id="@+id/qrText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="QR 스캔"
+                        android:textSize="12dp"
+                        android:textColor="#ffffff"
+                      />
+
+                </LinearLayout>
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="RFID: "
+                        android:textSize="12dp"
+                        android:textColor="#ffffff" />
+                    <TextView
+                        android:id="@+id/cargoAddress"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="위치"
+                        android:textSize="12dp"
+                        android:textColor="#ffffff"
+                      />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="작업 공간: "
+                        android:textSize="12dp"
+                        android:textColor="#ffffff" />
+                    <TextView
+                        android:id="@+id/workSpace"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="위치"
+                        android:textSize="12dp"
+                        android:textColor="#ffffff"
+                        />
 
 
-            <TextView
-                android:id="@+id/timeText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="time"
-                android:textSize="20dp"
-                android:textColor="#ffffff"
-                android:gravity="center"
-                app:layout_constraintTop_toBottomOf="@id/cargoAddress"
-                app:layout_constraintLeft_toLeftOf="parent"
-                app:layout_constraintRight_toRightOf="parent"/>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="시간: "
+                        android:textSize="12dp"
+                        android:textColor="#ffffff" />
+                    <TextView
+                        android:id="@+id/timeText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="time"
+                        android:textSize="12dp"
+                        android:textColor="#ffffff"
+                        />
+                </LinearLayout>
+
+
+            </LinearLayout>
+
+
+
+
+
+
+
+
+
+
         </androidx.constraintlayout.widget.ConstraintLayout>
 
     </com.google.android.material.appbar.AppBarLayout>

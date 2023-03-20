@@ -15,6 +15,7 @@ import java.util.Arrays;
 
 public class DepthFrameAvailableListener implements ImageReader.OnImageAvailableListener {
     private static final String TAG = DepthFrameAvailableListener.class.getSimpleName();
+    private boolean isActive = false;
 
     /**
      * 설정 파라미터 상수
@@ -53,8 +54,6 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
      * 현재 샘플링 거리
      */
     public int mSamplingDistance = 0;
-
-
 
 
     private DepthFrameVisualizer depthFrameVisualizer;
@@ -370,6 +369,12 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
         int[] result = new int[10];
         Arrays.fill(result,Math.round((float) v/10));
         return result;
+    }
+
+    public void sendStatus(boolean s){
+        Log.e("TOF Status", s+"");
+        depthFrameVisualizer.onTOFStatus(s);
+        isActive = s;
     }
 
 

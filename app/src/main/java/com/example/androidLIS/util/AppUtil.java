@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.view.WindowManager;
 
 import com.orhanobut.hawk.Hawk;
 
@@ -37,39 +38,6 @@ public class AppUtil {
         System.exit(0);
     }
 
-
-    /**
-     * 네트워크 상태 체크
-     * @param context
-     * @return
-     */
-    public boolean isNetworkConnected(Context context)
-    {
-        ConnectivityManager manager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo mobile = manager.getNetworkInfo(ConnectivityManager.TYPE_MOBILE);
-        NetworkInfo wifi = manager.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
-        NetworkInfo wimax = manager.getNetworkInfo(ConnectivityManager.TYPE_WIMAX);
-        boolean bwimax = false;
-        if (wimax != null)
-        {
-            bwimax = wimax.isConnected();
-        }
-        if (mobile != null)
-        {
-            if (mobile.isConnected() || wifi.isConnected() || bwimax)
-            {
-                return true;
-            }
-        }
-        else
-        {
-            if (wifi.isConnected() || bwimax)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
 
 
     /**
@@ -155,6 +123,8 @@ public class AppUtil {
         }
 
     }
+
+
 
 
 }

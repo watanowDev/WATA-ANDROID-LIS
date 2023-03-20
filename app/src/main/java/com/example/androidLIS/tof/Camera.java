@@ -34,6 +34,9 @@ public class Camera extends CameraDevice.StateCallback {
     private ImageReader previewReader;
     private CaptureRequest.Builder previewBuilder;
     private DepthFrameAvailableListener imageAvailableListener;
+    private String mCameraId = null;
+    private CameraDevice mCameraDevice = null;
+    private boolean mCameraStatus = false;
 
     public Camera(Context context, DepthFrameVisualizer depthFrameVisualizer) {
         this.context = context;
@@ -48,10 +51,14 @@ public class Camera extends CameraDevice.StateCallback {
     public void openFrontDepthCamera() {
         final String cameraId = getFrontDepthCameraID();
         Log.i(TAG, "getFrontDepthCameraID : ID:  " + cameraId);
-
+        mCameraId = cameraId;
         if(cameraId != null) {
             openCamera(cameraId);
         }
+    }
+
+    public boolean getCameraStatus(){
+        return mCameraStatus;
     }
 
     private String getFrontDepthCameraID() {
@@ -98,20 +105,38 @@ public class Camera extends CameraDevice.StateCallback {
             int permission = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA);
             if(PackageManager.PERMISSION_GRANTED == permission) {
                 cameraManager.openCamera(cameraId, this, null);
+                imageAvailableListener.sendStatus(true);
                 Log.i(TAG, "openCamera : camera Id: " + cameraId);
+                mCameraStatus = true;
             }else{
                 Log.e(TAG,"Permission not available to open camera");
+                imageAvailableListener.sendStatus(false);
+                mCameraStatus = false;
             }
         }catch (CameraAccessException | IllegalStateException | SecurityException e){
+            imageAvailableListener.sendStatus(false);
+            mCameraStatus = false;
             Log.e(TAG,"Opening Camera has an Exception " + e);
             e.printStackTrace();
         }
     }
 
 
+    public void closeCamera() {
+        if(mCameraDevice != null){
+            mCameraDevice.close();
+            mCameraDevice = null;
+        }
+        mCameraStatus = false;
+        imageAvailableListener.sendStatus(false);
+    }
+
+
+
     @Override
     public void onOpened(@NonNull CameraDevice camera) {
         try {
+            mCameraDevice = camera;
             previewBuilder = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             previewBuilder.set(CaptureRequest.JPEG_ORIENTATION, 0);
             Range<Integer> fpsRange = new Range<>(FPS_MIN, FPS_MAX);

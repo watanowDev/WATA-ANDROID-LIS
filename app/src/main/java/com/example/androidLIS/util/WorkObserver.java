@@ -45,7 +45,6 @@ public class WorkObserver {
         final ProgressDialog dialog = new ProgressDialog(context);
         dialog.setTitle(message);
         dialog.show();
-
         rx.Observable.timer(1, TimeUnit.SECONDS)
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(

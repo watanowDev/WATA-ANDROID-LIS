@@ -47,9 +47,16 @@
         </activity>
 
 
-        <service android:name="com.apulsetech.lib.remote.service.BtSppRemoteService" android:exported="false"/>
+        <service
+            android:name="com.apulsetech.lib.remote.service.BtSppRemoteService"
+            android:exported="false" />
+        <provider
+            android:name="com.apulsetech.lib.provider.LocalStateProvider"
+            android:authorities="com.example.androidLIS"
+            android:exported="false" />
 
 
     </application>
+
 
 </manifest>
