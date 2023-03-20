@@ -922,6 +922,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                             , AppConfig.GET_IN
                             , AppConfig.VEHICLE_ID
                             , "field"
+                            , isShelf
                             , "1"
                             , mCurrentLoadCargo
                             , String.valueOf(mLoadInCargoVolume)
@@ -958,6 +959,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                             , AppConfig.GET_OUT
                             , AppConfig.VEHICLE_ID
                             , mCurrentRack.rack
+                            , isShelf
                             , String.valueOf(mCurrentRack.floor)
                             , mCargo.getName()
                             , String.valueOf(mLoadInCargoVolume)
@@ -983,6 +985,7 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                             , AppConfig.GET_OUT
                             , AppConfig.VEHICLE_ID
                             , "field"
+                            , isShelf
                             , "1"
                             , mCargo.getName()
                             , String.valueOf(mLoadInCargoVolume)
@@ -1024,7 +1027,6 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
                 mCargoDepth.setText(textview);
             }
         });
-
     }
 
     @Override

@@ -5,7 +5,7 @@ public class ActionInfo {
     public String action;
     public String vehicleId;
     public String epc;
-    public String shelf;
+    public boolean shelf;
     public String height;
     public String loadId;
     public String loadRate;
@@ -17,7 +17,7 @@ public class ActionInfo {
                       String ac,
                       String vid,
                       String ep,
-                      String sp,
+                      boolean sp,
                       String h,
                       String lid,
                       String lR,

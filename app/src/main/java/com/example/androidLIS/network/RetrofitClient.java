@@ -1,5 +1,7 @@
 package com.example.androidLIS.network;
 
+import com.example.androidLIS.util.AppConfig;
+
 import java.io.IOException;
 
 import okhttp3.Interceptor;
@@ -40,7 +42,7 @@ public class RetrofitClient {
         httpClient.addInterceptor(interceptor);
         OkHttpClient okHttpClient = httpClient.build();
         Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl("https://dev-lms-api.watalbs.com/monitoring/geofence/addition-info/logistics/heavy-equipment/")
+                .baseUrl(AppConfig.WATA_PLATFORM_URL)
                 .addConverterFactory(GsonConverterFactory.create())
                 .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
                 .client(okHttpClient)
